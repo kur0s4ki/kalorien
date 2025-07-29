@@ -85,7 +85,7 @@ export default function GoalPage() {
   const getCalorieTarget = () => {
     // Always use current weight calculations for BMR/TDEE (metabolism based on current body)
     const currentCalculations = calculations;
-    
+
     if (!currentCalculations) {
       return 2000; // Fallback value
     }
@@ -142,8 +142,8 @@ export default function GoalPage() {
   const macroDistribution = getMacroDistribution();
 
   // Calculate actual protein intake based on goal and user preference
-  const targetWeightForProtein = (isTargetWeightEnabled && selectedGoal !== 'stay-fit') 
-    ? getTargetWeightInKg() 
+  const targetWeightForProtein = (isTargetWeightEnabled && selectedGoal !== 'stay-fit')
+    ? getTargetWeightInKg()
     : userData.weight;
   // Use proteinPerKg setting (which is actually grams per pound in the UI)
   const goalProteinIntake = targetWeightForProtein * 2.20462 * proteinPerKg; // Convert kg to lbs, then multiply by g/lb setting
@@ -276,8 +276,8 @@ export default function GoalPage() {
   };
 
   const goals = [
-    { id: 'lose-weight', label: 'Lose weight', active: selectedGoal === 'lose-weight' },
-    { id: 'gain-muscles', label: 'Gain muscles', active: selectedGoal === 'gain-muscles' },
+    { id: 'lose-weight', label: 'Lose', active: selectedGoal === 'lose-weight' },
+    { id: 'gain-muscles', label: 'Gain', active: selectedGoal === 'gain-muscles' },
     { id: 'stay-fit', label: 'Maintain', active: selectedGoal === 'stay-fit' }
   ];
 
@@ -376,9 +376,9 @@ export default function GoalPage() {
                   </div>
                 </div>
                 <p className="text-xs text-gray-500">
-                  {selectedGoal === 'stay-fit' 
+                  {selectedGoal === 'stay-fit'
                     ? 'Maintain goal uses your current weight - target weight disabled'
-                    : isTargetWeightEnabled 
+                    : isTargetWeightEnabled
                       ? 'Using target weight for protein calculations and goal tracking'
                       : 'Using current weight for all calculations'
                   }
@@ -463,7 +463,7 @@ export default function GoalPage() {
                   />
                 </div>
                 <p className="text-xs text-gray-500">
-                  {selectedGoal === 'stay-fit' 
+                  {selectedGoal === 'stay-fit'
                     ? 'Adjust between 0.1-5.0g per pound (based on current weight)'
                     : 'Adjust between 0.1-5.0g per pound (0.8-1.2g typical range)'
                   }
@@ -720,7 +720,7 @@ export default function GoalPage() {
                       </div>
                       <p className="text-xs text-gray-500 mt-1">
                         {proteinPerKg}g per pound of {selectedGoal === 'stay-fit' ? 'current' : (isTargetWeightEnabled ? 'target' : 'current')} weight ({formatWeight(
-                          targetWeightForProtein, 
+                          targetWeightForProtein,
                           userData.unitSystem
                         )})
                       </p>
