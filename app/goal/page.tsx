@@ -27,22 +27,7 @@ export default function GoalPage() {
   } = useCalculator();
   const router = useRouter();
 
-  // Early return if data is missing - BEFORE any other hooks
-  if (!calculations || !userData.weight || !userData.height) {
-    useEffect(() => {
-      router.push('/');
-    }, [router]);
-
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Redirecting to home...</p>
-        </div>
-      </div>
-    );
-  }
-
+  // All hooks must be called before any conditional logic
   const [selectedGoal, setSelectedGoal] = useState('stay-fit');
   const [isContactPopupOpen, setIsContactPopupOpen] = useState(false);
 
@@ -54,6 +39,52 @@ export default function GoalPage() {
   const [activelyEditingProtein, setActivelyEditingProtein] = useState(false);
   const isInitialized = useRef(false);
   const logCount = useRef(0);
+
+  // Helper functions - defined before useEffect hooks to avoid hoisting issues
+
+  // Helper function to get current weight in display units
+  const getCurrentWeightInDisplayUnits = () => {
+    // Return a safe default if userData is not available
+    if (!userData.weight) return 70; // Default weight in kg
+
+    if (userData.unitSystem === 'imperial') {
+      return Math.round(userData.weight * 2.20462);
+    }
+    return Math.round(userData.weight * 10) / 10;
+  };
+
+  // Goal-specific slider ranges
+  const getSliderMin = () => {
+    // Return safe defaults if userData is not available
+    if (!userData.weight) return 40; // Safe minimum
+
+    const currentWeight = getCurrentWeightInDisplayUnits();
+    if (selectedGoal === 'lose-weight') {
+      // For weight loss, allow going down to a reasonable minimum
+      return Math.max(currentWeight - 100, currentWeight * 0.7); // Don't go below 70% of current weight
+    } else if (selectedGoal === 'gain-muscles') {
+      // For muscle gain, start from current weight
+      return currentWeight;
+    }
+    // Default range
+    return currentWeight - 100;
+  };
+
+  const getSliderMax = () => {
+    // Return safe defaults if userData is not available
+    if (!userData.weight) return 200; // Safe maximum
+
+    const currentWeight = getCurrentWeightInDisplayUnits();
+    if (selectedGoal === 'lose-weight') {
+      // For weight loss, max should be current weight
+      return currentWeight;
+    } else if (selectedGoal === 'gain-muscles') {
+      // For muscle gain, allow significant gain
+      return currentWeight + 100;
+    }
+    // Default range
+    return currentWeight + 100;
+  };
 
   // Sync target weight input with actual target weight value
   useEffect(() => {
@@ -74,45 +105,29 @@ export default function GoalPage() {
   }, [proteinPerKg, activelyEditingProtein]);
 
   // Auto-disable target weight for "Maintain" goal and enable for others
+  // Also reset target weight to current weight when switching between goals
   useEffect(() => {
-    if (selectedGoal === 'stay-fit' && isTargetWeightEnabled) {
-      setIsTargetWeightEnabled(false);
-    } else if (selectedGoal !== 'stay-fit' && !isTargetWeightEnabled) {
-      setIsTargetWeightEnabled(true);
-      // Set target weight to current weight when switching to Lose or Gain
-      const currentWeightInDisplayUnits = getCurrentWeightInDisplayUnits();
+    // Only run if userData is available
+    if (!userData.weight || !userData.height) return;
+
+    const currentWeightInDisplayUnits = getCurrentWeightInDisplayUnits();
+
+    if (selectedGoal === 'stay-fit') {
+      // Disable target weight for maintain goal
+      if (isTargetWeightEnabled) {
+        setIsTargetWeightEnabled(false);
+      }
+    } else {
+      // Enable target weight for lose/gain goals and reset to current weight
+      if (!isTargetWeightEnabled) {
+        setIsTargetWeightEnabled(true);
+      }
+      // Always reset target weight to current weight when switching goals
+      // This prevents the slider from maintaining values from previous goal selections
       setTargetWeight(currentWeightInDisplayUnits.toString());
       setTargetWeightInput(currentWeightInDisplayUnits.toString());
     }
-  }, [selectedGoal, isTargetWeightEnabled, setIsTargetWeightEnabled]);
-
-  // Reset target weight to current weight when switching goals to prevent memory issues
-  useEffect(() => {
-    if (selectedGoal !== 'stay-fit') {
-      const currentWeightInDisplayUnits = getCurrentWeightInDisplayUnits();
-      setTargetWeight(currentWeightInDisplayUnits.toString());
-      setTargetWeightInput(currentWeightInDisplayUnits.toString());
-    }
-  }, [selectedGoal]);
-
-  // Redirect to home if calculations are missing (direct navigation or refresh)
-  useEffect(() => {
-    if (!calculations || !userData.weight || !userData.height) {
-      router.push('/');
-    }
-  }, [calculations, userData, router]);
-
-  // Show loading while redirecting
-  if (!calculations || !userData.weight || !userData.height) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Redirecting to home...</p>
-        </div>
-      </div>
-    );
-  }
+  }, [selectedGoal, isTargetWeightEnabled, setIsTargetWeightEnabled, userData.weight, userData.height]);
 
   const handleContactSubmit = (contactData: { name: string; email: string }) => {
     // Here you would typically send the data to your backend
@@ -203,40 +218,7 @@ export default function GoalPage() {
     return targetValue; // Already in kg
   };
 
-  // Helper function to get current weight in display units
-  const getCurrentWeightInDisplayUnits = () => {
-    if (userData.unitSystem === 'imperial') {
-      return Math.round(userData.weight * 2.20462);
-    }
-    return Math.round(userData.weight * 10) / 10;
-  };
 
-  // Goal-specific slider ranges
-  const getSliderMin = () => {
-    const currentWeight = getCurrentWeightInDisplayUnits();
-    if (selectedGoal === 'lose-weight') {
-      // For weight loss, allow going down to a reasonable minimum
-      return Math.max(currentWeight - 100, currentWeight * 0.7); // Don't go below 70% of current weight
-    } else if (selectedGoal === 'gain-muscles') {
-      // For muscle gain, start from current weight
-      return currentWeight;
-    }
-    // Default range
-    return currentWeight - 100;
-  };
-
-  const getSliderMax = () => {
-    const currentWeight = getCurrentWeightInDisplayUnits();
-    if (selectedGoal === 'lose-weight') {
-      // For weight loss, max should be current weight
-      return currentWeight;
-    } else if (selectedGoal === 'gain-muscles') {
-      // For muscle gain, allow significant gain
-      return currentWeight + 100;
-    }
-    // Default range
-    return currentWeight + 100;
-  };
 
   const calorieTarget = getCalorieTarget();
 
@@ -355,6 +337,8 @@ export default function GoalPage() {
     }
   }, [targetWeight, isTargetWeightEnabled]);
 
+
+
   // 🔍 COMPREHENSIVE LOGGING FUNCTION
   const logCompleteData = () => {
     console.log('🚀 GOAL PAGE - COMPLETE DATA ANALYSIS');
@@ -396,6 +380,23 @@ export default function GoalPage() {
     { id: 'gain-muscles', label: 'Gain', active: selectedGoal === 'gain-muscles' }
   ];
 
+  // Redirect to home if calculations are missing (after all hooks have been called)
+  if (!calculations || !userData.weight || !userData.height) {
+    // Trigger redirect
+    if (typeof window !== 'undefined') {
+      router.push('/');
+    }
+
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Redirecting to home...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-screen bg-gray-50 flex items-center justify-center overflow-hidden md:min-h-screen md:bg-gray-50 md:flex-none md:items-start md:overflow-visible">
       <div className="max-w-2xl mx-auto w-full h-full md:h-auto md:p-4">
@@ -418,7 +419,16 @@ export default function GoalPage() {
                   {goals.map((goal) => (
                     <button
                       key={goal.id}
-                      onClick={() => setSelectedGoal(goal.id)}
+                      onClick={() => {
+                        setSelectedGoal(goal.id);
+                        // Immediately reset target weight to current weight when switching goals
+                        // This ensures the slider doesn't maintain values from previous selections
+                        if (goal.id !== 'stay-fit') {
+                          const currentWeightInDisplayUnits = getCurrentWeightInDisplayUnits();
+                          setTargetWeight(currentWeightInDisplayUnits.toString());
+                          setTargetWeightInput(currentWeightInDisplayUnits.toString());
+                        }
+                      }}
                       className={`flex-1 py-3 rounded-lg font-medium transition-all duration-200 ${goal.active
                         ? 'text-white shadow-md'
                         : 'bg-gray-300 text-gray-700 hover:bg-gray-400'
@@ -577,12 +587,38 @@ export default function GoalPage() {
                             onFocus={() => setActivelyEditingTargetWeight(true)}
                             onBlur={() => {
                               setActivelyEditingTargetWeight(false);
+                              // Validate and correct the input value on blur
+                              const numericValue = parseFloat(targetWeightInput);
+                              if (isNaN(numericValue) || numericValue <= 0) {
+                                // Reset to current weight if invalid
+                                const currentWeight = getCurrentWeightInDisplayUnits();
+                                setTargetWeight(currentWeight.toString());
+                                setTargetWeightInput(currentWeight.toString());
+                              } else {
+                                // Ensure it's within goal-specific range
+                                const minValue = getSliderMin();
+                                const maxValue = getSliderMax();
+                                const clampedValue = Math.min(Math.max(numericValue, minValue), maxValue);
+                                const clampedValueStr = clampedValue.toString();
+                                setTargetWeight(clampedValueStr);
+                                setTargetWeightInput(clampedValueStr);
+                              }
                             }}
                             onChange={(e) => {
                               setTargetWeightInput(e.target.value);
                               const numericValue = parseFloat(e.target.value);
                               if (!isNaN(numericValue) && numericValue > 0) {
-                                setTargetWeight(e.target.value);
+                                // Validate against goal-specific ranges
+                                const minValue = getSliderMin();
+                                const maxValue = getSliderMax();
+
+                                if (numericValue >= minValue && numericValue <= maxValue) {
+                                  setTargetWeight(e.target.value);
+                                } else {
+                                  // Clamp to valid range
+                                  const clampedValue = Math.min(Math.max(numericValue, minValue), maxValue);
+                                  setTargetWeight(clampedValue.toString());
+                                }
                               }
                             }}
                             className="text-center w-24 h-8 font-bold"
@@ -634,8 +670,16 @@ export default function GoalPage() {
                         max={getSliderMax()}
                         value={targetWeight || getCurrentWeightInDisplayUnits()}
                         onChange={(e) => {
-                          setTargetWeight(e.target.value);
-                          setTargetWeightInput(e.target.value);
+                          const newValue = parseFloat(e.target.value);
+                          const minValue = getSliderMin();
+                          const maxValue = getSliderMax();
+
+                          // Ensure the value is within the goal-specific range
+                          const clampedValue = Math.min(Math.max(newValue, minValue), maxValue);
+                          const clampedValueStr = clampedValue.toString();
+
+                          setTargetWeight(clampedValueStr);
+                          setTargetWeightInput(clampedValueStr);
                         }}
                         className="absolute inset-0 w-full h-6 opacity-0 cursor-pointer"
                         step="0.5"
