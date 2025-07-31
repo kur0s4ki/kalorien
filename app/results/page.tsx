@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,9 +12,23 @@ export default function ResultsPage() {
   const { userData, calculations } = useCalculator();
   const [activePopup, setActivePopup] = useState<'basal' | 'bmi' | 'whr' | 'print' | null>(null);
 
-  // Calculations should always be available when navigating here
-  if (!calculations) {
-    return null; // This should never be visible with proper navigation
+  // Redirect to home if calculations are missing (direct navigation or refresh)
+  useEffect(() => {
+    if (!calculations || !userData.weight || !userData.height) {
+      router.push('/');
+    }
+  }, [calculations, userData, router]);
+
+  // Show loading while redirecting
+  if (!calculations || !userData.weight || !userData.height) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Redirecting to home...</p>
+        </div>
+      </div>
+    );
   }
 
   const bmiCategories = [

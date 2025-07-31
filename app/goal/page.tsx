@@ -3,12 +3,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Switch } from '@/components/ui/switch';
+
 import { Input } from '@/components/ui/input';
 import { useCalculator } from '@/contexts/CalculatorContext';
 import { formatWeight, formatLength } from '@/lib/units';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Target, Utensils, TrendingUp, Apple } from 'lucide-react';
+import { TrendingUp, Apple } from 'lucide-react';
 import { ContactPopup } from '@/components/ui/contact-popup';
 import { useRouter } from 'next/navigation';
 
@@ -26,6 +26,23 @@ export default function GoalPage() {
     calculateWithTargetWeight
   } = useCalculator();
   const router = useRouter();
+
+  // Early return if data is missing - BEFORE any other hooks
+  if (!calculations || !userData.weight || !userData.height) {
+    useEffect(() => {
+      router.push('/');
+    }, [router]);
+
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Redirecting to home...</p>
+        </div>
+      </div>
+    );
+  }
+
   const [selectedGoal, setSelectedGoal] = useState('stay-fit');
   const [isContactPopupOpen, setIsContactPopupOpen] = useState(false);
 
@@ -56,16 +73,45 @@ export default function GoalPage() {
     }
   }, [proteinPerKg, activelyEditingProtein]);
 
-  // Auto-disable target weight for "Maintain" goal (logical consistency)
+  // Auto-disable target weight for "Maintain" goal and enable for others
   useEffect(() => {
     if (selectedGoal === 'stay-fit' && isTargetWeightEnabled) {
       setIsTargetWeightEnabled(false);
+    } else if (selectedGoal !== 'stay-fit' && !isTargetWeightEnabled) {
+      setIsTargetWeightEnabled(true);
+      // Set target weight to current weight when switching to Lose or Gain
+      const currentWeightInDisplayUnits = getCurrentWeightInDisplayUnits();
+      setTargetWeight(currentWeightInDisplayUnits.toString());
+      setTargetWeightInput(currentWeightInDisplayUnits.toString());
     }
   }, [selectedGoal, isTargetWeightEnabled, setIsTargetWeightEnabled]);
 
-  // Calculations should always be available when navigating here
-  if (!calculations) {
-    return null; // This should never be visible with proper navigation
+  // Reset target weight to current weight when switching goals to prevent memory issues
+  useEffect(() => {
+    if (selectedGoal !== 'stay-fit') {
+      const currentWeightInDisplayUnits = getCurrentWeightInDisplayUnits();
+      setTargetWeight(currentWeightInDisplayUnits.toString());
+      setTargetWeightInput(currentWeightInDisplayUnits.toString());
+    }
+  }, [selectedGoal]);
+
+  // Redirect to home if calculations are missing (direct navigation or refresh)
+  useEffect(() => {
+    if (!calculations || !userData.weight || !userData.height) {
+      router.push('/');
+    }
+  }, [calculations, userData, router]);
+
+  // Show loading while redirecting
+  if (!calculations || !userData.weight || !userData.height) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Redirecting to home...</p>
+        </div>
+      </div>
+    );
   }
 
   const handleContactSubmit = (contactData: { name: string; email: string }) => {
@@ -93,8 +139,50 @@ export default function GoalPage() {
     // Get calorie target based on selected goal - but always from current weight metabolism
     switch (selectedGoal) {
       case 'lose-weight':
+        // For weight loss, adjust deficit based on target weight difference
+        if (isTargetWeightEnabled && targetWeight) {
+          const currentWeightKg = userData.weight;
+          const targetWeightKg = getTargetWeightInKg();
+          const weightDifference = currentWeightKg - targetWeightKg; // Positive for weight loss
+
+          // Base weight loss calories
+          let lossCalories = currentCalculations.calorieTargets.slowLoss;
+
+          // Adjust based on how much weight they want to lose
+          if (weightDifference > 0) {
+            // More aggressive deficit for larger weight loss goals, but keep it safe
+            // Reduce 25-50 calories per 10kg (22lbs) of target loss, max 200 calories additional deficit
+            const additionalDeficit = Math.min(200, (weightDifference / 10) * 35);
+            lossCalories -= additionalDeficit;
+
+            // Safety check: never go below BMR
+            const minCalories = currentCalculations.bmr;
+            lossCalories = Math.max(lossCalories, minCalories);
+          }
+
+          return lossCalories;
+        }
         return currentCalculations.calorieTargets.slowLoss;
       case 'gain-muscles':
+        // For muscle gain, adjust calories based on target weight difference
+        if (isTargetWeightEnabled && targetWeight) {
+          const currentWeightKg = userData.weight;
+          const targetWeightKg = getTargetWeightInKg();
+          const weightDifference = targetWeightKg - currentWeightKg;
+
+          // Base muscle gain calories
+          let gainCalories = currentCalculations.calorieTargets.muscleGain;
+
+          // Adjust based on how much weight they want to gain
+          if (weightDifference > 0) {
+            // More aggressive surplus for larger weight gain goals
+            // Add 50-100 calories per 10kg (22lbs) of target gain
+            const additionalCalories = Math.min(300, (weightDifference / 10) * 75);
+            gainCalories += additionalCalories;
+          }
+
+          return gainCalories;
+        }
         return currentCalculations.calorieTargets.muscleGain;
       case 'stay-fit':
         return currentCalculations.calorieTargets.maintenance;
@@ -121,6 +209,33 @@ export default function GoalPage() {
       return Math.round(userData.weight * 2.20462);
     }
     return Math.round(userData.weight * 10) / 10;
+  };
+
+  // Goal-specific slider ranges
+  const getSliderMin = () => {
+    const currentWeight = getCurrentWeightInDisplayUnits();
+    if (selectedGoal === 'lose-weight') {
+      // For weight loss, allow going down to a reasonable minimum
+      return Math.max(currentWeight - 100, currentWeight * 0.7); // Don't go below 70% of current weight
+    } else if (selectedGoal === 'gain-muscles') {
+      // For muscle gain, start from current weight
+      return currentWeight;
+    }
+    // Default range
+    return currentWeight - 100;
+  };
+
+  const getSliderMax = () => {
+    const currentWeight = getCurrentWeightInDisplayUnits();
+    if (selectedGoal === 'lose-weight') {
+      // For weight loss, max should be current weight
+      return currentWeight;
+    } else if (selectedGoal === 'gain-muscles') {
+      // For muscle gain, allow significant gain
+      return currentWeight + 100;
+    }
+    // Default range
+    return currentWeight + 100;
   };
 
   const calorieTarget = getCalorieTarget();
@@ -277,8 +392,8 @@ export default function GoalPage() {
 
   const goals = [
     { id: 'lose-weight', label: 'Lose', active: selectedGoal === 'lose-weight' },
-    { id: 'gain-muscles', label: 'Gain', active: selectedGoal === 'gain-muscles' },
-    { id: 'stay-fit', label: 'Maintain', active: selectedGoal === 'stay-fit' }
+    { id: 'stay-fit', label: 'Maintain', active: selectedGoal === 'stay-fit' },
+    { id: 'gain-muscles', label: 'Gain', active: selectedGoal === 'gain-muscles' }
   ];
 
   return (
@@ -319,456 +434,536 @@ export default function GoalPage() {
                 </div>
               </div>
 
-              {/* Target Weight */}
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-lg font-semibold text-gray-800">Target Weight</span>
-                  <div className="flex items-center space-x-3">
-                    <div className="relative inline-block">
+              {/* Conditional Content Based on Selected Goal */}
+              {selectedGoal === 'stay-fit' && (
+                <>
+                  {/* Protein Intake for Maintain */}
+                  <div className="space-y-3">
+                    <div className="flex items-center space-x-3">
+                      <span className="text-sm font-medium text-gray-700">
+                        Protein Intake (g per lb body weight):
+                      </span>
                       <Input
                         type="number"
-                        value={targetWeightInput}
-                        onFocus={() => setActivelyEditingTargetWeight(true)}
+                        value={proteinInput}
+                        onFocus={() => setActivelyEditingProtein(true)}
                         onBlur={() => {
-                          setActivelyEditingTargetWeight(false);
-                        }}
-                        onChange={(e) => {
-                          setTargetWeightInput(e.target.value);
-                          const numericValue = parseFloat(e.target.value);
-                          if (!isNaN(numericValue) && numericValue > 0) {
-                            setTargetWeight(e.target.value);
+                          setActivelyEditingProtein(false);
+                          const value = parseFloat(proteinInput);
+                          if (!isNaN(value) && value >= 0.1 && value <= 5.0) {
+                            setProteinPerKg(value);
+                          } else {
+                            setProteinInput(proteinPerKg.toString());
                           }
                         }}
-                        className={`text-center w-24 h-8 font-bold ${selectedGoal === 'stay-fit' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        onChange={(e) => {
+                          setProteinInput(e.target.value);
+                          const value = parseFloat(e.target.value);
+                          if (!isNaN(value) && value >= 0.1 && value <= 5.0) {
+                            setProteinPerKg(value);
+                          }
+                        }}
+                        className="text-center w-20 h-8 font-bold"
                         style={{
-                          backgroundColor: selectedGoal === 'stay-fit' ? '#E5E7EB' : '#F5F5F5',
+                          backgroundColor: '#F5F5F5',
                           border: 'solid 1px #CFCFCF',
                           borderRadius: '12px',
                           fontSize: '14px'
                         }}
-                        placeholder={userData.unitSystem === 'metric' ? '70' : '154'}
-                        disabled={selectedGoal === 'stay-fit'}
+                        step="0.1"
+                        min="0.1"
+                        max="5.0"
+                        placeholder="1.0"
                       />
-                      <span
-                        className="absolute right-2 top-1/2 transform -translate-y-1/2 text-xs font-medium pointer-events-none select-none"
-                        style={{
-                          color: '#9CA3AF',
-                          opacity: 0.7,
-                          zIndex: 10
-                        }}
-                      >
-                        {userData.unitSystem === 'metric' ? 'kg' : 'lbs'}
-                      </span>
                     </div>
-                    <Switch
-                      checked={isTargetWeightEnabled && selectedGoal !== 'stay-fit'}
-                      onCheckedChange={(checked) => {
-                        if (selectedGoal !== 'stay-fit') {
-                          setIsTargetWeightEnabled(checked);
-                        }
-                      }}
-                      disabled={selectedGoal === 'stay-fit'}
-                      style={{
-                        backgroundColor: (isTargetWeightEnabled && selectedGoal !== 'stay-fit') ? '#31860A' : '#D1D5DB',
-                        opacity: selectedGoal === 'stay-fit' ? 0.5 : 1
-                      }}
-                    />
-                  </div>
-                </div>
-                <p className="text-xs text-gray-500">
-                  {selectedGoal === 'stay-fit'
-                    ? 'Maintain goal uses your current weight - target weight disabled'
-                    : isTargetWeightEnabled
-                      ? 'Using target weight for protein calculations and goal tracking'
-                      : 'Using current weight for all calculations'
-                  }
-                </p>
-
-                {/* Target Weight Slider */}
-                <div className={`relative ${!isTargetWeightEnabled ? 'opacity-50 pointer-events-none' : ''}`}>
-                  <div className="w-full h-2 bg-gray-300 rounded-full">
-                    {/* Filled track */}
-                    <div
-                      className="h-2 rounded-full"
-                      style={{
-                        width: `${Math.min(Math.max(((parseFloat(targetWeight || '0') - (getCurrentWeightInDisplayUnits() - 20)) / 40) * 100, 0), 100)}%`,
-                        backgroundColor: isTargetWeightEnabled ? '#31860A' : '#9CA3AF'
-                      }}
-                    />
-                    <div
-                      className={`absolute w-6 h-6 bg-white rounded-full shadow-lg ${isTargetWeightEnabled ? 'cursor-pointer' : 'cursor-not-allowed'}`}
-                      style={{
-                        left: `${Math.min(Math.max(((parseFloat(targetWeight || '0') - (getCurrentWeightInDisplayUnits() - 20)) / 40) * 100, 0), 100)}%`,
-                        top: '-8px',
-                        transform: 'translateX(-50%)',
-                        border: `2px solid ${isTargetWeightEnabled ? '#31860A' : '#9CA3AF'}`
-                      }}
-                    />
-                  </div>
-                  <input
-                    type="range"
-                    min={getCurrentWeightInDisplayUnits() - 20}
-                    max={getCurrentWeightInDisplayUnits() + 20}
-                    value={targetWeight || getCurrentWeightInDisplayUnits()}
-                    onChange={(e) => {
-                      setTargetWeight(e.target.value);
-                      setTargetWeightInput(e.target.value);
-                    }}
-                    className={`absolute inset-0 w-full h-6 opacity-0 ${isTargetWeightEnabled ? 'cursor-pointer' : 'cursor-not-allowed'}`}
-                    step="0.5"
-                    disabled={!isTargetWeightEnabled}
-                  />
-                </div>
-              </div>
-
-              {/* Protein Intake Customization */}
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium text-gray-700">
-                    Protein Intake (g per lb body weight)
-                  </span>
-                  <Input
-                    type="number"
-                    value={proteinInput}
-                    onFocus={() => setActivelyEditingProtein(true)}
-                    onBlur={() => {
-                      setActivelyEditingProtein(false);
-                      const value = parseFloat(proteinInput);
-                      if (!isNaN(value) && value >= 0.1 && value <= 5.0) {
-                        setProteinPerKg(value);
-                      } else {
-                        // Reset to current value if invalid
-                        setProteinInput(proteinPerKg.toString());
-                      }
-                    }}
-                    onChange={(e) => {
-                      setProteinInput(e.target.value);
-                      // Allow real-time updates for valid values, but don't restrict typing
-                      const value = parseFloat(e.target.value);
-                      if (!isNaN(value) && value >= 0.1 && value <= 5.0) {
-                        setProteinPerKg(value);
-                      }
-                    }}
-                    className="text-center w-20 h-8 font-bold"
-                    style={{
-                      backgroundColor: '#F5F5F5',
-                      border: 'solid 1px #CFCFCF',
-                      borderRadius: '12px',
-                      fontSize: '14px'
-                    }}
-                    step="0.1"
-                    min="0.1"
-                    max="5.0"
-                    placeholder="1.0"
-                  />
-                </div>
-                <p className="text-xs text-gray-500">
-                  {selectedGoal === 'stay-fit'
-                    ? 'Adjust between 0.1-5.0g per pound (based on current weight)'
-                    : 'Adjust between 0.1-5.0g per pound (0.8-1.2g typical range)'
-                  }
-                </p>
-              </div>
-
-              {/* Recommended Daily Calorie Intake */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-gray-800">
-                  Recommended Daily Calorie Intake
-                </h3>
-
-                <div className="flex items-center space-x-6">
-                  {/* Animated Pie Chart */}
-                  <div className="relative w-24 h-24">
-                    <svg width="96" height="96" viewBox="0 0 96 96" className="transform -rotate-90">
-                      {/* Background circle */}
-                      <circle cx="48" cy="48" r="40" fill="none" stroke="#E5E7EB" strokeWidth="12" />
-
-                      {/* Proteins - Light Gray */}
-                      <circle
-                        cx="48" cy="48" r="40"
-                        fill="none"
-                        stroke="#F44336"
-                        strokeWidth="12"
-                        strokeDasharray={`${proteinPercentage * 2.51} 251`}
-                        strokeDashoffset="0"
-                        style={{
-                          transition: 'stroke-dasharray 0.5s ease-in-out'
-                        }}
-                      />
-
-                      {/* Carbs - Blue */}
-                      <circle
-                        cx="48" cy="48" r="40"
-                        fill="none"
-                        stroke="#0091EA"
-                        strokeWidth="12"
-                        strokeDasharray={`${carbPercentage * 2.51} 251`}
-                        strokeDashoffset={`-${proteinPercentage * 2.51}`}
-                        style={{
-                          transition: 'stroke-dasharray 0.5s ease-in-out, stroke-dashoffset 0.5s ease-in-out'
-                        }}
-                      />
-
-                      {/* Fats - Yellow */}
-                      <circle
-                        cx="48" cy="48" r="40"
-                        fill="none"
-                        stroke="#FFC107"
-                        strokeWidth="12"
-                        strokeDasharray={`${fatPercentage * 2.51} 251`}
-                        strokeDashoffset={`-${(proteinPercentage + carbPercentage) * 2.51}`}
-                        style={{
-                          transition: 'stroke-dasharray 0.5s ease-in-out, stroke-dashoffset 0.5s ease-in-out'
-                        }}
-                      />
-
-                      {/* Fiber - Green */}
-                      <circle
-                        cx="48" cy="48" r="40"
-                        fill="none"
-                        stroke="#8BC34A"
-                        strokeWidth="12"
-                        strokeDasharray={`${fiberPercentage * 2.51} 251`}
-                        strokeDashoffset={`-${(proteinPercentage + carbPercentage + fatPercentage) * 2.51}`}
-                        style={{
-                          transition: 'stroke-dasharray 0.5s ease-in-out, stroke-dashoffset 0.5s ease-in-out'
-                        }}
-                      />
-                    </svg>
+                    <p className="text-xs text-gray-500">
+                      Adjust between 0.1-5.0g per pound (based on current weight)
+                    </p>
                   </div>
 
-                  {/* Calorie Info */}
-                  <div>
-                    <div className="text-3xl font-bold text-gray-800">
-                      {nutritionData.totalCalories} Calories
+                  {/* Maintenance Calories */}
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold text-gray-800">
+                      Maintenance Calories
+                    </h3>
+                    <div className="flex items-center space-x-6">
+                      {/* Animated Pie Chart */}
+                      <div className="relative w-24 h-24">
+                        <svg width="96" height="96" viewBox="0 0 96 96" className="transform -rotate-90">
+                          <circle cx="48" cy="48" r="40" fill="none" stroke="#E5E7EB" strokeWidth="12" />
+                          <circle
+                            cx="48" cy="48" r="40"
+                            fill="none"
+                            stroke="#F44336"
+                            strokeWidth="12"
+                            strokeDasharray={`${proteinPercentage * 2.51} 251`}
+                            strokeDashoffset="0"
+                            style={{ transition: 'stroke-dasharray 0.5s ease-in-out' }}
+                          />
+                          <circle
+                            cx="48" cy="48" r="40"
+                            fill="none"
+                            stroke="#0091EA"
+                            strokeWidth="12"
+                            strokeDasharray={`${carbPercentage * 2.51} 251`}
+                            strokeDashoffset={`-${proteinPercentage * 2.51}`}
+                            style={{ transition: 'stroke-dasharray 0.5s ease-in-out, stroke-dashoffset 0.5s ease-in-out' }}
+                          />
+                          <circle
+                            cx="48" cy="48" r="40"
+                            fill="none"
+                            stroke="#FFC107"
+                            strokeWidth="12"
+                            strokeDasharray={`${fatPercentage * 2.51} 251`}
+                            strokeDashoffset={`-${(proteinPercentage + carbPercentage) * 2.51}`}
+                            style={{ transition: 'stroke-dasharray 0.5s ease-in-out, stroke-dashoffset 0.5s ease-in-out' }}
+                          />
+                          <circle
+                            cx="48" cy="48" r="40"
+                            fill="none"
+                            stroke="#8BC34A"
+                            strokeWidth="12"
+                            strokeDasharray={`${fiberPercentage * 2.51} 251`}
+                            strokeDashoffset={`-${(proteinPercentage + carbPercentage + fatPercentage) * 2.51}`}
+                            style={{ transition: 'stroke-dasharray 0.5s ease-in-out, stroke-dashoffset 0.5s ease-in-out' }}
+                          />
+                        </svg>
+                      </div>
+                      <div>
+                        <div className="text-3xl font-bold text-gray-800">
+                          {nutritionData.totalCalories} Calories
+                        </div>
+                      </div>
+                    </div>
+                    {/* Nutrition Breakdown */}
+                    <div className="space-y-2">
+                      {nutritionData.macros.map((macro, index) => (
+                        <div key={index} className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <div
+                              className="w-3 h-3 rounded-full"
+                              style={{ backgroundColor: macro.color }}
+                            />
+                            <span className="text-sm font-medium" style={{ color: macro.color }}>
+                              {macro.name}
+                            </span>
+                          </div>
+                          <div className="flex items-center space-x-4">
+                            <span className="text-sm font-medium" style={{ color: macro.color }}>
+                              {macro.amount} {macro.unit}
+                            </span>
+                            <span className="text-sm font-medium w-8 text-right" style={{ color: macro.color }}>
+                              {macro.percentage}%
+                            </span>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                </div>
+                </>
+              )}
 
-                {/* Nutrition Breakdown */}
-                <div className="space-y-2">
-                  {nutritionData.macros.map((macro, index) => (
-                    <div key={index} className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
+              {(selectedGoal === 'lose-weight' || selectedGoal === 'gain-muscles') && (
+                <>
+                  {/* Target Weight for Lose/Gain */}
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-lg font-semibold text-gray-800">Target Weight</span>
+                      <div className="flex items-center space-x-3">
+                        <div className="relative inline-block">
+                          <Input
+                            type="number"
+                            value={targetWeightInput}
+                            onFocus={() => setActivelyEditingTargetWeight(true)}
+                            onBlur={() => {
+                              setActivelyEditingTargetWeight(false);
+                            }}
+                            onChange={(e) => {
+                              setTargetWeightInput(e.target.value);
+                              const numericValue = parseFloat(e.target.value);
+                              if (!isNaN(numericValue) && numericValue > 0) {
+                                setTargetWeight(e.target.value);
+                              }
+                            }}
+                            className="text-center w-24 h-8 font-bold"
+                            style={{
+                              backgroundColor: '#F5F5F5',
+                              border: 'solid 1px #CFCFCF',
+                              borderRadius: '12px',
+                              fontSize: '14px'
+                            }}
+                            placeholder={userData.unitSystem === 'metric' ? '70' : '154'}
+                          />
+                          <span
+                            className="absolute right-2 top-1/2 transform -translate-y-1/2 text-xs font-medium pointer-events-none select-none"
+                            style={{
+                              color: '#9CA3AF',
+                              opacity: 0.7,
+                              zIndex: 10
+                            }}
+                          >
+                            {userData.unitSystem === 'metric' ? 'kg' : 'lbs'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Target Weight Slider */}
+                    <div className="relative">
+                      <div className="w-full h-2 bg-gray-300 rounded-full">
                         <div
-                          className="w-3 h-3 rounded-full"
-                          style={{ backgroundColor: macro.color }}
+                          className="h-2 rounded-full"
+                          style={{
+                            width: `${Math.min(Math.max(((parseFloat(targetWeight || '0') - getSliderMin()) / (getSliderMax() - getSliderMin())) * 100, 0), 100)}%`,
+                            backgroundColor: '#31860A'
+                          }}
                         />
-                        <span className="text-sm font-medium" style={{ color: macro.color }}>
-                          {macro.name}
-                        </span>
+                        <div
+                          className="absolute w-6 h-6 bg-white rounded-full shadow-lg cursor-pointer"
+                          style={{
+                            left: `${Math.min(Math.max(((parseFloat(targetWeight || '0') - getSliderMin()) / (getSliderMax() - getSliderMin())) * 100, 0), 100)}%`,
+                            top: '-8px',
+                            transform: 'translateX(-50%)',
+                            border: '2px solid #31860A'
+                          }}
+                        />
                       </div>
-                      <div className="flex items-center space-x-4">
-                        <span className="text-sm font-medium" style={{ color: macro.color }}>
-                          {macro.amount} {macro.unit}
-                        </span>
-                        <span className="text-sm font-medium w-8 text-right" style={{ color: macro.color }}>
-                          {macro.percentage}%
-                        </span>
+                      <input
+                        type="range"
+                        min={getSliderMin()}
+                        max={getSliderMax()}
+                        value={targetWeight || getCurrentWeightInDisplayUnits()}
+                        onChange={(e) => {
+                          setTargetWeight(e.target.value);
+                          setTargetWeightInput(e.target.value);
+                        }}
+                        className="absolute inset-0 w-full h-6 opacity-0 cursor-pointer"
+                        step="0.5"
+                      />
+                    </div>
+
+                    {/* Goal Direction Validation */}
+                    {selectedGoal === 'lose-weight' && parseFloat(targetWeight || '0') > getCurrentWeightInDisplayUnits() && (
+                      <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mt-2">
+                        <p className="text-sm text-orange-700">
+                          ⚠️ Your target weight is higher than your current weight. For weight loss, set a target below {formatWeight(getCurrentWeightInDisplayUnits(), userData.unitSystem)}.
+                        </p>
+                      </div>
+                    )}
+
+                    {selectedGoal === 'gain-muscles' && parseFloat(targetWeight || '0') < getCurrentWeightInDisplayUnits() && (
+                      <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mt-2">
+                        <p className="text-sm text-orange-700">
+                          ⚠️ Your target weight is lower than your current weight. For muscle gain, set a target above {formatWeight(getCurrentWeightInDisplayUnits(), userData.unitSystem)}.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  {/* Protein Intake for Lose/Gain */}
+                  <div className="space-y-3">
+                    <div className="flex items-center space-x-3">
+                      <span className="text-sm font-medium text-gray-700">
+                        Protein Intake (g per lb body weight):
+                      </span>
+                      <Input
+                        type="number"
+                        value={proteinInput}
+                        onFocus={() => setActivelyEditingProtein(true)}
+                        onBlur={() => {
+                          setActivelyEditingProtein(false);
+                          const value = parseFloat(proteinInput);
+                          if (!isNaN(value) && value >= 0.1 && value <= 5.0) {
+                            setProteinPerKg(value);
+                          } else {
+                            setProteinInput(proteinPerKg.toString());
+                          }
+                        }}
+                        onChange={(e) => {
+                          setProteinInput(e.target.value);
+                          const value = parseFloat(e.target.value);
+                          if (!isNaN(value) && value >= 0.1 && value <= 5.0) {
+                            setProteinPerKg(value);
+                          }
+                        }}
+                        className="text-center w-20 h-8 font-bold"
+                        style={{
+                          backgroundColor: '#F5F5F5',
+                          border: 'solid 1px #CFCFCF',
+                          borderRadius: '12px',
+                          fontSize: '14px'
+                        }}
+                        step="0.1"
+                        min="0.1"
+                        max="5.0"
+                        placeholder="1.0"
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      Adjust between 0.1-5.0g per pound (0.8-1.2g typical range)
+                    </p>
+                  </div>
+
+                  {/* Macro Breakdown for Lose/Gain */}
+                  <div className="space-y-4">
+                    <div className="flex items-center space-x-6">
+                      {/* Animated Pie Chart */}
+                      <div className="relative w-24 h-24">
+                        <svg width="96" height="96" viewBox="0 0 96 96" className="transform -rotate-90">
+                          <circle cx="48" cy="48" r="40" fill="none" stroke="#E5E7EB" strokeWidth="12" />
+                          <circle
+                            cx="48" cy="48" r="40"
+                            fill="none"
+                            stroke="#F44336"
+                            strokeWidth="12"
+                            strokeDasharray={`${proteinPercentage * 2.51} 251`}
+                            strokeDashoffset="0"
+                            style={{ transition: 'stroke-dasharray 0.5s ease-in-out' }}
+                          />
+                          <circle
+                            cx="48" cy="48" r="40"
+                            fill="none"
+                            stroke="#0091EA"
+                            strokeWidth="12"
+                            strokeDasharray={`${carbPercentage * 2.51} 251`}
+                            strokeDashoffset={`-${proteinPercentage * 2.51}`}
+                            style={{ transition: 'stroke-dasharray 0.5s ease-in-out, stroke-dashoffset 0.5s ease-in-out' }}
+                          />
+                          <circle
+                            cx="48" cy="48" r="40"
+                            fill="none"
+                            stroke="#FFC107"
+                            strokeWidth="12"
+                            strokeDasharray={`${fatPercentage * 2.51} 251`}
+                            strokeDashoffset={`-${(proteinPercentage + carbPercentage) * 2.51}`}
+                            style={{ transition: 'stroke-dasharray 0.5s ease-in-out, stroke-dashoffset 0.5s ease-in-out' }}
+                          />
+                          <circle
+                            cx="48" cy="48" r="40"
+                            fill="none"
+                            stroke="#8BC34A"
+                            strokeWidth="12"
+                            strokeDasharray={`${fiberPercentage * 2.51} 251`}
+                            strokeDashoffset={`-${(proteinPercentage + carbPercentage + fatPercentage) * 2.51}`}
+                            style={{ transition: 'stroke-dasharray 0.5s ease-in-out, stroke-dashoffset 0.5s ease-in-out' }}
+                          />
+                        </svg>
+                      </div>
+                      <div>
+                        <div className="text-3xl font-bold text-gray-800">
+                          {nutritionData.totalCalories} Calories
+                        </div>
                       </div>
                     </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Goal Recommendations Section with Tabs */}
-              <div className="space-y-4 pt-4 border-t border-gray-300">
-                <h3 className="text-xl font-bold text-gray-800">
-                  Suggested Target Goals
-                </h3>
-
-                <Tabs defaultValue="weight-goals" className="w-full">
-                  <TabsList className="grid w-full grid-cols-4 bg-gray-200 rounded-xl p-1 h-auto">
-                    <TabsTrigger
-                      value="weight-goals"
-                      className="data-[state=active]:bg-white data-[state=active]:text-green-700 data-[state=active]:shadow-sm data-[state=inactive]:text-gray-600 transition-all duration-200 rounded-lg font-bold text-xs flex flex-col items-center gap-1 py-2 min-h-[60px]"
-                    >
-                      <Target className="h-4 w-4" />
-                      <span className="hidden sm:inline">Weight & Body</span>
-                      <span className="sm:hidden">Weight</span>
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value="calorie-goals"
-                      className="data-[state=active]:bg-white data-[state=active]:text-green-700 data-[state=active]:shadow-sm data-[state=inactive]:text-gray-600 transition-all duration-200 rounded-lg font-bold text-xs flex flex-col items-center gap-1 py-2 min-h-[60px]"
-                    >
-                      <Utensils className="h-4 w-4" />
-                      <span className="hidden sm:inline">Daily Calories</span>
-                      <span className="sm:hidden">Calories</span>
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value="fat-loss"
-                      className="data-[state=active]:bg-white data-[state=active]:text-green-700 data-[state=active]:shadow-sm data-[state=inactive]:text-gray-600 transition-all duration-200 rounded-lg font-bold text-xs flex flex-col items-center gap-1 py-2 min-h-[60px]"
-                    >
-                      <TrendingUp className="h-4 w-4" />
-                      <span className="hidden sm:inline">Expected Results</span>
-                      <span className="sm:hidden">Results</span>
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value="nutrition"
-                      className="data-[state=active]:bg-white data-[state=active]:text-green-700 data-[state=active]:shadow-sm data-[state=inactive]:text-gray-600 transition-all duration-200 rounded-lg font-bold text-xs flex flex-col items-center gap-1 py-2 min-h-[60px]"
-                    >
-                      <Apple className="h-4 w-4" />
-                      <span className="hidden sm:inline">Nutrition</span>
-                      <span className="sm:hidden">Nutrition</span>
-                    </TabsTrigger>
-                  </TabsList>
-
-                  {/* Weight & Body Goals Tab */}
-                  <TabsContent value="weight-goals" className="space-y-3 mt-4">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      {/* Ideal Weight Range */}
-                      <div className="bg-white rounded-lg p-3 border border-gray-200">
-                        <h5 className="text-sm font-medium text-gray-600 mb-2">Your Ideal Weight Should Be Between</h5>
-                        <div className="text-lg font-bold text-gray-800">
-                          {formatWeight(calculations.idealWeightRange.lower, userData.unitSystem)} - {formatWeight(calculations.idealWeightRange.upper, userData.unitSystem)}
+                    {/* Nutrition Breakdown */}
+                    <div className="space-y-2">
+                      {nutritionData.macros.map((macro, index) => (
+                        <div key={index} className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <div
+                              className="w-3 h-3 rounded-full"
+                              style={{ backgroundColor: macro.color }}
+                            />
+                            <span className="text-sm font-medium" style={{ color: macro.color }}>
+                              {macro.name}
+                            </span>
+                          </div>
+                          <div className="flex items-center space-x-4">
+                            <span className="text-sm font-medium" style={{ color: macro.color }}>
+                              {macro.amount} {macro.unit}
+                            </span>
+                            <span className="text-sm font-medium w-8 text-right" style={{ color: macro.color }}>
+                              {macro.percentage}%
+                            </span>
+                          </div>
                         </div>
-                        <p className="text-xs text-gray-500 mt-1">Healthy weight range for your height</p>
-                      </div>
-
-                      {/* Best Target Weight */}
-                      <div className="bg-white rounded-lg p-3 border border-gray-200">
-                        <h5 className="text-sm font-medium text-gray-600 mb-2">Best Estimated Target Weight</h5>
-                        <div className="text-lg font-bold text-green-600">
-                          {formatWeight(targetWeightCalculations?.goalRecommendations.bestTargetWeight || calculations?.goalRecommendations.bestTargetWeight || 0, userData.unitSystem)}
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1">Optimal target to aim for</p>
-                      </div>
-
-                      {/* Ideal Waist Size */}
-                      <div className="bg-white rounded-lg p-3 border border-gray-200">
-                        <h5 className="text-sm font-medium text-gray-600 mb-2">Your Ideal Waist Size</h5>
-                        <div className="text-lg font-bold text-blue-600">
-                          {formatLength(targetWeightCalculations?.goalRecommendations.idealWaistSize || calculations?.goalRecommendations.idealWaistSize || 0, userData.unitSystem)}
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1">Target waist circumference</p>
-                      </div>
+                      ))}
                     </div>
-                  </TabsContent>
+                  </div>
+                </>
+              )}
 
-                  {/* Daily Calories Tab */}
-                  <TabsContent value="calorie-goals" className="space-y-3 mt-4">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      {/* Maintenance Calories */}
-                      <div className="bg-white rounded-lg p-3 border border-gray-200">
-                        <h5 className="text-sm font-medium text-gray-600 mb-2">Maintenance Calories</h5>
-                        <div className="text-lg font-bold text-gray-800">
-                          {Math.round(targetWeightCalculations?.tdee || calculations?.tdee || 0)} Calories/day
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1">To maintain current weight</p>
+              {selectedGoal === 'lose-weight' && (
+                <div className="space-y-4 pt-4 border-t border-gray-300">
+                  {/* Calorie Targets for Weight Loss */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-white rounded-lg p-4 border border-gray-200">
+                      <h5 className="text-sm font-medium text-gray-600 mb-2">Rapid Weight Loss</h5>
+                      <div className="text-2xl font-bold text-red-600">
+                        {Math.round(Math.max(getCalorieTarget() - 200, calculations?.bmr || 1200))} Calories/day
                       </div>
-
-                      {/* Rapid Weight Loss */}
-                      <div className="bg-white rounded-lg p-3 border border-gray-200">
-                        <h5 className="text-sm font-medium text-gray-600 mb-2">Rapid Weight Loss</h5>
-                        <div className="text-lg font-bold text-red-600">
-                          {Math.round(targetWeightCalculations?.goalRecommendations.rapidWeightLossCalories || calculations?.goalRecommendations.rapidWeightLossCalories || 0)} Calories/day
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1">Safe deficit based on your profile</p>
-                        <p className="text-xs text-orange-600 mt-1 font-medium">⚠️ Requires careful monitoring</p>
-                      </div>
-
-                      {/* Sustainable Weight Loss */}
-                      <div className="bg-white rounded-lg p-3 border border-gray-200">
-                        <h5 className="text-sm font-medium text-gray-600 mb-2">Slow & Consistent Weight Loss (Recommended)</h5>
-                        <div className="text-lg font-bold text-green-600">
-                          {Math.round(targetWeightCalculations?.goalRecommendations.sustainableWeightLossCalories || calculations?.goalRecommendations.sustainableWeightLossCalories || 0)} Calories/day
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1">Conservative, sustainable approach</p>
-                        <p className="text-xs text-green-600 mt-1 font-medium">✓ Recommended for long-term success</p>
-                      </div>
+                      <p className="text-xs text-gray-500 mt-1">More aggressive deficit</p>
+                      <p className="text-xs text-orange-600 mt-1 font-medium">⚠️ Requires careful monitoring</p>
                     </div>
-                  </TabsContent>
 
-                  {/* Expected Results Tab */}
-                  <TabsContent value="fat-loss" className="space-y-3 mt-4">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      {/* Maximum Weekly Fat Loss */}
-                      <div className="bg-white rounded-lg p-3 border border-gray-200">
-                        <h5 className="text-sm font-medium text-gray-600 mb-2">Maximum Weekly Fat Loss</h5>
-                        <div className="text-lg font-bold text-red-600">
-                          {formatWeight(targetWeightCalculations?.goalRecommendations.maxWeeklyFatLoss || calculations?.goalRecommendations.maxWeeklyFatLoss || 0, userData.unitSystem)}/week
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1">At {Math.round(targetWeightCalculations?.goalRecommendations.rapidWeightLossCalories || calculations?.goalRecommendations.rapidWeightLossCalories || 0)} Calories/day</p>
-                      </div>
-
-                      {/* Sustainable Weekly Fat Loss */}
-                      <div className="bg-white rounded-lg p-3 border border-gray-200">
-                        <h5 className="text-sm font-medium text-gray-600 mb-2">Sustainable Weekly Fat Loss</h5>
-                        <div className="text-lg font-bold text-orange-600">
-                          {formatWeight(targetWeightCalculations?.goalRecommendations.sustainableWeeklyFatLoss || calculations?.goalRecommendations.sustainableWeeklyFatLoss || 0, userData.unitSystem)}/week
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1">At {Math.round(targetWeightCalculations?.goalRecommendations.sustainableWeightLossCalories || calculations?.goalRecommendations.sustainableWeightLossCalories || 0)} Calories/day</p>
-                      </div>
-
-                      {/* Water Weight Fluctuation */}
-                      <div className="bg-white rounded-lg p-3 border border-gray-200">
-                        <h5 className="text-sm font-medium text-gray-600 mb-2">Daily Water Weight Fluctuation</h5>
-                        <div className="text-lg font-bold text-blue-600">
-                          ±{formatWeight(targetWeightCalculations?.waterWeightFluctuation || calculations?.waterWeightFluctuation || 0, userData.unitSystem)}
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1">Normal daily variation</p>
-                      </div>
-                    </div>
-                  </TabsContent>
-
-                  {/* Nutrition Tab */}
-                  <TabsContent value="nutrition" className="space-y-3 mt-4">
-                    <div className="bg-white rounded-lg p-3 border border-gray-200">
-                      <h5 className="text-sm font-medium text-gray-600 mb-2">Suggested Daily Protein Intake</h5>
-                      <div className="text-lg font-bold text-green-600">
-                        {Math.round(goalProteinIntake)}g per day
+                    <div className="bg-white rounded-lg p-4 border border-gray-200">
+                      <h5 className="text-sm font-medium text-gray-600 mb-2">Slow and Consistent Weight Loss</h5>
+                      <div className="text-2xl font-bold text-green-600">
+                        {Math.round(getCalorieTarget())} Calories/day
                       </div>
                       <p className="text-xs text-gray-500 mt-1">
-                        {proteinPerKg}g per pound of {selectedGoal === 'stay-fit' ? 'current' : (isTargetWeightEnabled ? 'target' : 'current')} weight ({formatWeight(
-                          targetWeightForProtein,
-                          userData.unitSystem
-                        )})
+                        {isTargetWeightEnabled && targetWeight ?
+                          `Adjusted for ${formatWeight(Math.abs(userData.weight - getTargetWeightInKg()), userData.unitSystem)} target loss` :
+                          'Sustainable deficit for weight loss'
+                        }
                       </p>
+                      <p className="text-xs text-green-600 mt-1 font-medium">✓ Recommended for long-term success</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {selectedGoal === 'gain-muscles' && (
+                <div className="space-y-4 pt-4 border-t border-gray-300">
+                  {/* Calorie Targets for Muscle Gain */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-white rounded-lg p-4 border border-gray-200">
+                      <h5 className="text-sm font-medium text-gray-600 mb-2">Rapid Weight Gain</h5>
+                      <div className="text-2xl font-bold text-orange-600">
+                        {Math.round(getCalorieTarget() + 200)} Calories/day
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">Higher surplus for faster gains</p>
+                      <p className="text-xs text-orange-600 mt-1 font-medium">⚠️ May include some fat gain</p>
                     </div>
 
-                    {/* Action Items */}
-                    <div className="space-y-3">
-                      <h4 className="text-base font-semibold text-gray-700">Action Items</h4>
-
-                      <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
-                        <ul className="space-y-1.5 text-sm text-gray-700">
-                          <li className="flex items-start space-x-2">
-                            <span className="text-blue-600 font-bold">•</span>
-                            <span>Set your calorie tracking app to <strong>{Math.round(calculations?.goalRecommendations.sustainableWeightLossCalories || 0)} Calories/day</strong> for sustainable weight loss</span>
-                          </li>
-                          <li className="flex items-start space-x-2">
-                            <span className="text-blue-600 font-bold">•</span>
-                            <span>Weigh yourself weekly, not daily - expect ±{formatWeight(calculations?.waterWeightFluctuation || 0, userData.unitSystem)} daily fluctuation</span>
-                          </li>
-                          <li className="flex items-start space-x-2">
-                            <span className="text-blue-600 font-bold">•</span>
-                            <span>Recalculate your goals every 5 pounds lost to update your maintenance calories</span>
-                          </li>
-                          <li className="flex items-start space-x-2">
-                            <span className="text-blue-600 font-bold">•</span>
-                            <span>Aim for <strong>{Math.round(goalProteinIntake)}g protein daily</strong> to preserve muscle mass</span>
-                          </li>
-                          <li className="flex items-start space-x-2">
-                            <span className="text-blue-600 font-bold">•</span>
-                            <span><strong>Monitor your health:</strong> Stop and consult a doctor if you experience fatigue, dizziness, hair loss, or mood changes</span>
-                          </li>
-                        </ul>
+                    <div className="bg-white rounded-lg p-4 border border-gray-200">
+                      <h5 className="text-sm font-medium text-gray-600 mb-2">Slow and Consistent Weight Gain</h5>
+                      <div className="text-2xl font-bold text-blue-600">
+                        {Math.round(getCalorieTarget())} Calories/day
                       </div>
-
-                      {/* Safety Reminders */}
-                      <div className="bg-yellow-50 rounded-lg p-3 border border-yellow-200">
-                        <h5 className="text-yellow-800 font-medium mb-1.5">⚠️ Safety Reminders</h5>
-                        <ul className="space-y-0.5 text-xs text-yellow-700">
-                          <li>• Never eat below {Math.round(calculations?.bmr || 0)} calories (your BMR) without medical supervision</li>
-                          <li>• Weight loss should not exceed 1-2 pounds per week for most people</li>
-                          <li>• These calculations are estimates - individual needs may vary significantly</li>
-                          <li>• Consult healthcare professionals before making major dietary changes</li>
-                        </ul>
-                      </div>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {isTargetWeightEnabled && targetWeight ?
+                          `Adjusted for ${formatWeight(Math.abs(getTargetWeightInKg() - userData.weight), userData.unitSystem)} target gain` :
+                          'Moderate surplus for lean gains'
+                        }
+                      </p>
+                      <p className="text-xs text-blue-600 mt-1 font-medium">✓ Recommended for long-term success</p>
                     </div>
-                  </TabsContent>
-                </Tabs>
-              </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Goal-Specific Content */}
+              {selectedGoal === 'stay-fit' && (
+                <div className="space-y-4 pt-4 border-t border-gray-300">
+                  <h3 className="text-xl font-bold text-gray-800">
+                    Suggested Target Goals
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div className="bg-white rounded-lg p-3 border border-gray-200">
+                      <h5 className="text-sm font-medium text-gray-600 mb-2">Your Ideal Weight Should Be Between</h5>
+                      <div className="text-lg font-bold text-gray-800">
+                        {formatWeight(calculations.idealWeightRange.lower, userData.unitSystem)} - {formatWeight(calculations.idealWeightRange.upper, userData.unitSystem)}
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">Healthy weight range for your height</p>
+                    </div>
+                    <div className="bg-white rounded-lg p-3 border border-gray-200">
+                      <h5 className="text-sm font-medium text-gray-600 mb-2">Best Estimated Target Weight</h5>
+                      <div className="text-lg font-bold text-green-600">
+                        {formatWeight(calculations?.goalRecommendations.bestTargetWeight || 0, userData.unitSystem)}
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">Optimal target to aim for</p>
+                    </div>
+                    <div className="bg-white rounded-lg p-3 border border-gray-200">
+                      <h5 className="text-sm font-medium text-gray-600 mb-2">Your Ideal Waist Size</h5>
+                      <div className="text-lg font-bold text-blue-600">
+                        {formatLength(calculations?.goalRecommendations.idealWaistSize || 0, userData.unitSystem)}
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">Target waist circumference</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {(selectedGoal === 'lose-weight' || selectedGoal === 'gain-muscles') && (
+                <div className="space-y-4">
+                  <Tabs defaultValue="expected-results" className="w-full">
+                    <TabsList className="grid w-full grid-cols-2 bg-gray-200 rounded-xl p-1 h-auto">
+                      <TabsTrigger
+                        value="expected-results"
+                        className="data-[state=active]:bg-white data-[state=active]:text-green-700 data-[state=active]:shadow-sm data-[state=inactive]:text-gray-600 transition-all duration-200 rounded-lg font-bold text-xs flex flex-col items-center gap-1 py-2 min-h-[60px]"
+                      >
+                        <TrendingUp className="h-4 w-4" />
+                        <span>Expected Results</span>
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="nutrition"
+                        className="data-[state=active]:bg-white data-[state=active]:text-green-700 data-[state=active]:shadow-sm data-[state=inactive]:text-gray-600 transition-all duration-200 rounded-lg font-bold text-xs flex flex-col items-center gap-1 py-2 min-h-[60px]"
+                      >
+                        <Apple className="h-4 w-4" />
+                        <span>Nutrition</span>
+                      </TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="expected-results" className="space-y-3 mt-4">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        {selectedGoal === 'lose-weight' ? (
+                          <>
+                            <div className="bg-white rounded-lg p-3 border border-gray-200">
+                              <h5 className="text-sm font-medium text-gray-600 mb-2">Maximum Weekly Fat Loss</h5>
+                              <div className="text-lg font-bold text-red-600">
+                                {formatWeight(calculations?.goalRecommendations.maxWeeklyFatLoss || 0, userData.unitSystem)}/week
+                              </div>
+                              <p className="text-xs text-gray-500 mt-1">At rapid calorie deficit</p>
+                            </div>
+                            <div className="bg-white rounded-lg p-3 border border-gray-200">
+                              <h5 className="text-sm font-medium text-gray-600 mb-2">Sustainable Weekly Fat Loss</h5>
+                              <div className="text-lg font-bold text-green-600">
+                                {formatWeight(calculations?.goalRecommendations.sustainableWeeklyFatLoss || 0, userData.unitSystem)}/week
+                              </div>
+                              <p className="text-xs text-gray-500 mt-1">At sustainable deficit</p>
+                            </div>
+                            <div className="bg-white rounded-lg p-3 border border-gray-200">
+                              <h5 className="text-sm font-medium text-gray-600 mb-2">Daily Water Weight Fluctuation</h5>
+                              <div className="text-lg font-bold text-blue-600">
+                                ±{formatWeight(calculations?.waterWeightFluctuation || 0, userData.unitSystem)}
+                              </div>
+                              <p className="text-xs text-gray-500 mt-1">Normal daily variation</p>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="bg-white rounded-lg p-3 border border-gray-200">
+                              <h5 className="text-sm font-medium text-gray-600 mb-2">Maximum Weekly Muscle Gain</h5>
+                              <div className="text-lg font-bold text-red-600">
+                                0.5-1.0 {userData.unitSystem === 'metric' ? 'kg' : 'lbs'}/week
+                              </div>
+                              <p className="text-xs text-gray-500 mt-1">With aggressive bulking approach</p>
+                            </div>
+                            <div className="bg-white rounded-lg p-3 border border-gray-200">
+                              <h5 className="text-sm font-medium text-gray-600 mb-2">Sustainable Weekly Muscle Gain</h5>
+                              <div className="text-lg font-bold text-green-600">
+                                0.25-0.5 {userData.unitSystem === 'metric' ? 'kg' : 'lbs'}/week
+                              </div>
+                              <p className="text-xs text-gray-500 mt-1">With moderate surplus and proper training</p>
+                            </div>
+                            <div className="bg-white rounded-lg p-3 border border-gray-200">
+                              <h5 className="text-sm font-medium text-gray-600 mb-2">Daily Water Weight Fluctuation</h5>
+                              <div className="text-lg font-bold text-blue-600">
+                                ±{formatWeight(calculations?.waterWeightFluctuation || 0, userData.unitSystem)}
+                              </div>
+                              <p className="text-xs text-gray-500 mt-1">Normal daily variation</p>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </TabsContent>
+                    <TabsContent value="nutrition" className="space-y-3 mt-4">
+                      <div className="bg-white rounded-lg p-3 border border-gray-200">
+                        <h5 className="text-sm font-medium text-gray-600 mb-2">Suggested Daily Protein Intake</h5>
+                        <div className="text-lg font-bold text-green-600">
+                          {Math.round(goalProteinIntake)}g per day
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {proteinPerKg}g per pound of target weight ({formatWeight(targetWeightForProtein, userData.unitSystem)})
+                        </p>
+                      </div>
+                    </TabsContent>
+                  </Tabs>
+                </div>
+              )}
+
+
+
             </div>
 
             {/* Navigation Buttons - Always at bottom */}
@@ -806,15 +1001,16 @@ export default function GoalPage() {
               </Button>
             </div>
           </CardContent>
-        </Card>
-      </div>
+        </Card >
+      </div >
 
       {/* Contact Popup */}
-      <ContactPopup
+      < ContactPopup
         isOpen={isContactPopupOpen}
-        onClose={() => setIsContactPopupOpen(false)}
+        onClose={() => setIsContactPopupOpen(false)
+        }
         onSubmit={handleContactSubmit}
       />
-    </div>
+    </div >
   );
 }
