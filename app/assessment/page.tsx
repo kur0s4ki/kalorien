@@ -828,8 +828,8 @@ export default function HealthDataForm() {
                                             {fieldErrors.shoulders && (
                                                 <p className="text-red-600 text-xs mt-1">
                                                     {userData.unitSystem === 'metric'
-                                                        ? 'Must be between 30-130 cm'
-                                                        : 'Must be between 11.8-51.2 inches'}
+                                                        ? 'Must be between 30-300 cm'
+                                                        : 'Must be between 11.8-118.1 inches'}
                                                 </p>
                                             )}
                                         </div>

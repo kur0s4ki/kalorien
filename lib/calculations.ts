@@ -725,9 +725,9 @@ export const validateUserData = (
   if (userData.measurements?.shoulders !== undefined) {
     if (
       userData.measurements.shoulders < 30 ||
-      userData.measurements.shoulders > 130
+      userData.measurements.shoulders > 300
     ) {
-      const error = "Shoulder circumference must be between 30 and 130 cm";
+      const error = "Shoulder circumference must be between 30 and 300 cm";
       if (measurementsOptional) {
         errors.push(error);
       }

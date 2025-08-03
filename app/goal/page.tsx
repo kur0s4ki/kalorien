@@ -34,6 +34,11 @@ export default function GoalPage() {
   // Local state for target weight input (for display purposes)
   const [targetWeightInput, setTargetWeightInput] = useState('');
   const [activelyEditingTargetWeight, setActivelyEditingTargetWeight] = useState(false);
+  // Track user-adjusted target weights per goal to preserve them
+  const [userAdjustedWeights, setUserAdjustedWeights] = useState<{
+    'lose-weight'?: string;
+    'gain-muscles'?: string;
+  }>({});
   // Local state for protein input (for display purposes)
   const [proteinInput, setProteinInput] = useState('');
   const [activelyEditingProtein, setActivelyEditingProtein] = useState(false);
@@ -105,7 +110,7 @@ export default function GoalPage() {
   }, [proteinPerKg, activelyEditingProtein]);
 
   // Auto-disable target weight for "Maintain" goal and enable for others
-  // Also reset target weight to current weight when switching between goals
+  // Preserve user-adjusted target weights when switching between goals
   useEffect(() => {
     // Only run if userData is available
     if (!userData.weight || !userData.height) return;
@@ -118,16 +123,26 @@ export default function GoalPage() {
         setIsTargetWeightEnabled(false);
       }
     } else {
-      // Enable target weight for lose/gain goals and reset to current weight
+      // Enable target weight for lose/gain goals
       if (!isTargetWeightEnabled) {
         setIsTargetWeightEnabled(true);
       }
-      // Always reset target weight to current weight when switching goals
-      // This prevents the slider from maintaining values from previous goal selections
-      setTargetWeight(currentWeightInDisplayUnits.toString());
-      setTargetWeightInput(currentWeightInDisplayUnits.toString());
+
+      // Check if user has a previously adjusted weight for this goal
+      const goalKey = selectedGoal as 'lose-weight' | 'gain-muscles';
+      const savedWeight = userAdjustedWeights[goalKey];
+
+      if (savedWeight) {
+        // Restore the user's previously adjusted weight for this goal
+        setTargetWeight(savedWeight);
+        setTargetWeightInput(savedWeight);
+      } else {
+        // First time on this goal, set to current weight
+        setTargetWeight(currentWeightInDisplayUnits.toString());
+        setTargetWeightInput(currentWeightInDisplayUnits.toString());
+      }
     }
-  }, [selectedGoal, isTargetWeightEnabled, setIsTargetWeightEnabled, userData.weight, userData.height]);
+  }, [selectedGoal, isTargetWeightEnabled, setIsTargetWeightEnabled, userData.weight, userData.height, userAdjustedWeights]);
 
   const handleContactSubmit = (contactData: { name: string; email: string }) => {
     // Here you would typically send the data to your backend
@@ -602,6 +617,14 @@ export default function GoalPage() {
                                 const clampedValueStr = clampedValue.toString();
                                 setTargetWeight(clampedValueStr);
                                 setTargetWeightInput(clampedValueStr);
+
+                                // Save user-adjusted weight for this goal
+                                if (selectedGoal === 'lose-weight' || selectedGoal === 'gain-muscles') {
+                                  setUserAdjustedWeights(prev => ({
+                                    ...prev,
+                                    [selectedGoal]: clampedValueStr
+                                  }));
+                                }
                               }
                             }}
                             onChange={(e) => {
@@ -612,12 +635,24 @@ export default function GoalPage() {
                                 const minValue = getSliderMin();
                                 const maxValue = getSliderMax();
 
+                                let finalValue: string;
                                 if (numericValue >= minValue && numericValue <= maxValue) {
                                   setTargetWeight(e.target.value);
+                                  finalValue = e.target.value;
                                 } else {
                                   // Clamp to valid range
                                   const clampedValue = Math.min(Math.max(numericValue, minValue), maxValue);
-                                  setTargetWeight(clampedValue.toString());
+                                  const clampedValueStr = clampedValue.toString();
+                                  setTargetWeight(clampedValueStr);
+                                  finalValue = clampedValueStr;
+                                }
+
+                                // Save user-adjusted weight for this goal
+                                if (selectedGoal === 'lose-weight' || selectedGoal === 'gain-muscles') {
+                                  setUserAdjustedWeights(prev => ({
+                                    ...prev,
+                                    [selectedGoal]: finalValue
+                                  }));
                                 }
                               }
                             }}
@@ -680,6 +715,14 @@ export default function GoalPage() {
 
                           setTargetWeight(clampedValueStr);
                           setTargetWeightInput(clampedValueStr);
+
+                          // Save user-adjusted weight for this goal
+                          if (selectedGoal === 'lose-weight' || selectedGoal === 'gain-muscles') {
+                            setUserAdjustedWeights(prev => ({
+                              ...prev,
+                              [selectedGoal]: clampedValueStr
+                            }));
+                          }
                         }}
                         className="absolute inset-0 w-full h-6 opacity-0 cursor-pointer"
                         step="0.5"
@@ -833,7 +876,7 @@ export default function GoalPage() {
                     <div className="bg-white rounded-lg p-4 border border-gray-200">
                       <h5 className="text-sm font-medium text-gray-600 mb-2">Rapid Weight Loss</h5>
                       <div className="text-2xl font-bold text-red-600">
-                        {Math.round(Math.max(getCalorieTarget() - 200, calculations?.bmr || 1200))} Calories/day
+                        {Math.round(Math.max(getCalorieTarget() - 200, calculations?.bmr || 1200))} Calories/Day
                       </div>
                       <p className="text-xs text-gray-500 mt-1">More aggressive deficit</p>
                       <p className="text-xs text-orange-600 mt-1 font-medium">⚠️ Requires careful monitoring</p>
@@ -842,7 +885,7 @@ export default function GoalPage() {
                     <div className="bg-white rounded-lg p-4 border border-gray-200">
                       <h5 className="text-sm font-medium text-gray-600 mb-2">Slow and Consistent Weight Loss</h5>
                       <div className="text-2xl font-bold text-green-600">
-                        {Math.round(getCalorieTarget())} Calories/day
+                        {Math.round(getCalorieTarget())} Calories/Day
                       </div>
                       <p className="text-xs text-gray-500 mt-1">
                         {isTargetWeightEnabled && targetWeight ?
@@ -863,7 +906,7 @@ export default function GoalPage() {
                     <div className="bg-white rounded-lg p-4 border border-gray-200">
                       <h5 className="text-sm font-medium text-gray-600 mb-2">Rapid Weight Gain</h5>
                       <div className="text-2xl font-bold text-orange-600">
-                        {Math.round(getCalorieTarget() + 200)} Calories/day
+                        {Math.round(getCalorieTarget() + 200)} Calories/Day
                       </div>
                       <p className="text-xs text-gray-500 mt-1">Higher surplus for faster gains</p>
                       <p className="text-xs text-orange-600 mt-1 font-medium">⚠️ May include some fat gain</p>
@@ -872,7 +915,7 @@ export default function GoalPage() {
                     <div className="bg-white rounded-lg p-4 border border-gray-200">
                       <h5 className="text-sm font-medium text-gray-600 mb-2">Slow and Consistent Weight Gain</h5>
                       <div className="text-2xl font-bold text-blue-600">
-                        {Math.round(getCalorieTarget())} Calories/day
+                        {Math.round(getCalorieTarget())} Calories/Day
                       </div>
                       <p className="text-xs text-gray-500 mt-1">
                         {isTargetWeightEnabled && targetWeight ?
@@ -995,11 +1038,36 @@ export default function GoalPage() {
                       <div className="bg-white rounded-lg p-3 border border-gray-200">
                         <h5 className="text-sm font-medium text-gray-600 mb-2">Suggested Daily Protein Intake</h5>
                         <div className="text-lg font-bold text-green-600">
-                          {Math.round(goalProteinIntake)}g per day
+                          {Math.round(goalProteinIntake)}g per Day
                         </div>
                         <p className="text-xs text-gray-500 mt-1">
                           {proteinPerKg}g per pound of target weight ({formatWeight(targetWeightForProtein, userData.unitSystem)})
                         </p>
+                      </div>
+
+                      {/* Nutrition App Instructions */}
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                        <h5 className="text-sm font-medium text-green-800 mb-2">📱 Set Your Calorie Counting App</h5>
+                        <div className="space-y-2">
+                          <p className="text-sm text-green-700">
+                            <strong>Daily Calorie Target:</strong> {nutritionData.totalCalories} calories
+                          </p>
+                          <p className="text-sm text-green-700">
+                            <strong>Macro Breakdown:</strong>
+                          </p>
+                          <div className="grid grid-cols-2 gap-2 text-xs text-green-600 ml-2">
+                            {nutritionData.macros.map((macro, index) => (
+                              <div key={index}>
+                                • {macro.name}: {macro.amount}g ({macro.percentage}%)
+                              </div>
+                            ))}
+                          </div>
+                          <div className="mt-3 pt-2 border-t border-green-200">
+                            <p className="text-xs text-green-600">
+                              💡 <strong>Tip:</strong> Use apps like MyFitnessPal, Cronometer, or Lose It! to track your daily intake and stay on target.
+                            </p>
+                          </div>
+                        </div>
                       </div>
                     </TabsContent>
                   </Tabs>
