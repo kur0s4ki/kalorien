@@ -285,17 +285,6 @@ export default function ResultsPage() {
 
               </div>
 
-              {/* Print Results Button */}
-              <div className="pt-6 text-right">
-                <button
-                  className="text-sm font-medium"
-                  style={{ color: '#31860A' }}
-                  onClick={() => openPopup('print')}
-                >
-                  Print results
-                </button>
-              </div>
-
             </div>
 
             {/* Navigation Buttons - Always at bottom */}
