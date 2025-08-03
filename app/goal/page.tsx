@@ -607,14 +607,16 @@ export default function GoalPage() {
                               if (isNaN(numericValue) || numericValue <= 0) {
                                 // Reset to current weight if invalid
                                 const currentWeight = getCurrentWeightInDisplayUnits();
-                                setTargetWeight(currentWeight.toString());
-                                setTargetWeightInput(currentWeight.toString());
+                                const roundedWeight = Math.round(currentWeight * 10) / 10;
+                                setTargetWeight(roundedWeight.toString());
+                                setTargetWeightInput(roundedWeight.toString());
                               } else {
-                                // Ensure it's within goal-specific range
+                                // Ensure it's within goal-specific range and round
                                 const minValue = getSliderMin();
                                 const maxValue = getSliderMax();
                                 const clampedValue = Math.min(Math.max(numericValue, minValue), maxValue);
-                                const clampedValueStr = clampedValue.toString();
+                                const roundedValue = Math.round(clampedValue * 10) / 10;
+                                const clampedValueStr = roundedValue.toString();
                                 setTargetWeight(clampedValueStr);
                                 setTargetWeightInput(clampedValueStr);
 
@@ -637,12 +639,16 @@ export default function GoalPage() {
 
                                 let finalValue: string;
                                 if (numericValue >= minValue && numericValue <= maxValue) {
-                                  setTargetWeight(e.target.value);
-                                  finalValue = e.target.value;
+                                  // Round to 1 decimal place to avoid precision issues
+                                  const roundedValue = Math.round(numericValue * 10) / 10;
+                                  const roundedValueStr = roundedValue.toString();
+                                  setTargetWeight(roundedValueStr);
+                                  finalValue = roundedValueStr;
                                 } else {
-                                  // Clamp to valid range
+                                  // Clamp to valid range and round
                                   const clampedValue = Math.min(Math.max(numericValue, minValue), maxValue);
-                                  const clampedValueStr = clampedValue.toString();
+                                  const roundedValue = Math.round(clampedValue * 10) / 10;
+                                  const clampedValueStr = roundedValue.toString();
                                   setTargetWeight(clampedValueStr);
                                   finalValue = clampedValueStr;
                                 }
@@ -711,7 +717,9 @@ export default function GoalPage() {
 
                           // Ensure the value is within the goal-specific range
                           const clampedValue = Math.min(Math.max(newValue, minValue), maxValue);
-                          const clampedValueStr = clampedValue.toString();
+                          // Round to 1 decimal place to avoid precision issues
+                          const roundedValue = Math.round(clampedValue * 10) / 10;
+                          const clampedValueStr = roundedValue.toString();
 
                           setTargetWeight(clampedValueStr);
                           setTargetWeightInput(clampedValueStr);
@@ -725,7 +733,7 @@ export default function GoalPage() {
                           }
                         }}
                         className="absolute inset-0 w-full h-6 opacity-0 cursor-pointer"
-                        step="0.5"
+                        step="0.1"
                       />
                     </div>
 
@@ -1063,9 +1071,15 @@ export default function GoalPage() {
                             ))}
                           </div>
                           <div className="mt-3 pt-2 border-t border-green-200">
-                            <p className="text-xs text-green-600">
-                              💡 <strong>Tip:</strong> Use apps like MyFitnessPal, Cronometer, or Lose It! to track your daily intake and stay on target.
+                            <p className="text-xs text-green-600 mb-2">
+                              💡 <strong>Tip:</strong> Want to master calorie counting and burn fat fast? Subscribe to HowToGetInShape.org to get instant access to my free video series—just your phone, a free calorie app, a food scale, and the fat‑burning desire to finally get in shape.
                             </p>
+                            <button
+                              className="text-xs font-medium text-green-700 hover:text-green-800 underline transition-colors"
+                              onClick={() => window.open('https://howtogetnshape.org', '_blank')}
+                            >
+                              Start the Free Fat‑Burn Video Series →
+                            </button>
                           </div>
                         </div>
                       </div>
@@ -1109,7 +1123,7 @@ export default function GoalPage() {
                   setIsContactPopupOpen(true);
                 }}
               >
-                Get My Results
+                Start Burning Fat Now
               </Button>
             </div>
           </CardContent>
