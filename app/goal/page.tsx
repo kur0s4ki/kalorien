@@ -30,6 +30,8 @@ export default function GoalPage() {
   // All hooks must be called before any conditional logic
   const [selectedGoal, setSelectedGoal] = useState('stay-fit');
   const [isContactPopupOpen, setIsContactPopupOpen] = useState(false);
+  const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
+  const [emailAddress, setEmailAddress] = useState('');
 
   // Local state for target weight input (for display purposes)
   const [targetWeightInput, setTargetWeightInput] = useState('');
@@ -46,6 +48,22 @@ export default function GoalPage() {
   const logCount = useRef(0);
 
   // Helper functions - defined before useEffect hooks to avoid hoisting issues
+
+  // Helper function to validate target weight input
+  const isTargetWeightValid = (value: string) => {
+    const numericValue = parseFloat(value);
+    if (isNaN(numericValue) || numericValue <= 0) return false;
+
+    const minValue = getSliderMin();
+    const maxValue = getSliderMax();
+    return numericValue >= minValue && numericValue <= maxValue;
+  };
+
+  // Helper function to validate protein input
+  const isProteinValid = (value: string) => {
+    const numericValue = parseFloat(value);
+    return !isNaN(numericValue) && numericValue >= 0.1 && numericValue <= 5.0;
+  };
 
   // Helper function to get current weight in display units
   const getCurrentWeightInDisplayUnits = () => {
@@ -427,7 +445,7 @@ export default function GoalPage() {
               {/* Goal Selection */}
               <div className="space-y-3">
                 <div className="flex items-center space-x-2">
-                  <span className="text-lg font-semibold text-gray-800">I want</span>
+                  <span className="text-lg font-semibold text-gray-800">I want to:</span>
                 </div>
 
                 <div className="flex gap-2">
@@ -474,11 +492,10 @@ export default function GoalPage() {
                         onFocus={() => setActivelyEditingProtein(true)}
                         onBlur={() => {
                           setActivelyEditingProtein(false);
-                          const value = parseFloat(proteinInput);
-                          if (!isNaN(value) && value >= 0.1 && value <= 5.0) {
+                          // Only update if valid, otherwise keep input to show error
+                          if (isProteinValid(proteinInput)) {
+                            const value = parseFloat(proteinInput);
                             setProteinPerKg(value);
-                          } else {
-                            setProteinInput(proteinPerKg.toString());
                           }
                         }}
                         onChange={(e) => {
@@ -488,10 +505,10 @@ export default function GoalPage() {
                             setProteinPerKg(value);
                           }
                         }}
-                        className="text-center w-20 h-8 font-bold"
+                        className={`text-center w-20 h-8 font-bold ${!isProteinValid(proteinInput) && proteinInput !== '' ? 'border-red-500' : ''}`}
                         style={{
-                          backgroundColor: '#F5F5F5',
-                          border: 'solid 1px #CFCFCF',
+                          backgroundColor: !isProteinValid(proteinInput) && proteinInput !== '' ? 'rgba(239, 68, 68, 0.1)' : '#F5F5F5',
+                          border: `solid 1px ${!isProteinValid(proteinInput) && proteinInput !== '' ? '#EF4444' : '#CFCFCF'}`,
                           borderRadius: '12px',
                           fontSize: '14px'
                         }}
@@ -501,6 +518,14 @@ export default function GoalPage() {
                         placeholder="1.0"
                       />
                     </div>
+
+                    {/* Error message for protein */}
+                    {!isProteinValid(proteinInput) && proteinInput !== '' && (
+                      <div className="text-red-600 text-xs mt-1">
+                        Protein intake must be between 0.1 and 5.0 grams per pound
+                      </div>
+                    )}
+
                     <p className="text-xs text-gray-500">
                       Adjust between 0.1-5.0g per pound (based on current weight)
                     </p>
@@ -602,29 +627,19 @@ export default function GoalPage() {
                             onFocus={() => setActivelyEditingTargetWeight(true)}
                             onBlur={() => {
                               setActivelyEditingTargetWeight(false);
-                              // Validate and correct the input value on blur
-                              const numericValue = parseFloat(targetWeightInput);
-                              if (isNaN(numericValue) || numericValue <= 0) {
-                                // Reset to current weight if invalid
-                                const currentWeight = getCurrentWeightInDisplayUnits();
-                                const roundedWeight = Math.round(currentWeight * 10) / 10;
-                                setTargetWeight(roundedWeight.toString());
-                                setTargetWeightInput(roundedWeight.toString());
-                              } else {
-                                // Ensure it's within goal-specific range and round
-                                const minValue = getSliderMin();
-                                const maxValue = getSliderMax();
-                                const clampedValue = Math.min(Math.max(numericValue, minValue), maxValue);
-                                const roundedValue = Math.round(clampedValue * 10) / 10;
-                                const clampedValueStr = roundedValue.toString();
-                                setTargetWeight(clampedValueStr);
-                                setTargetWeightInput(clampedValueStr);
+                              // Only update if the value is valid, otherwise keep the input as-is to show error
+                              if (isTargetWeightValid(targetWeightInput)) {
+                                const numericValue = parseFloat(targetWeightInput);
+                                const roundedValue = Math.round(numericValue * 2) / 2;
+                                const roundedValueStr = roundedValue.toString();
+                                setTargetWeight(roundedValueStr);
+                                setTargetWeightInput(roundedValueStr);
 
                                 // Save user-adjusted weight for this goal
                                 if (selectedGoal === 'lose-weight' || selectedGoal === 'gain-muscles') {
                                   setUserAdjustedWeights(prev => ({
                                     ...prev,
-                                    [selectedGoal]: clampedValueStr
+                                    [selectedGoal]: roundedValueStr
                                   }));
                                 }
                               }
@@ -633,39 +648,24 @@ export default function GoalPage() {
                               setTargetWeightInput(e.target.value);
                               const numericValue = parseFloat(e.target.value);
                               if (!isNaN(numericValue) && numericValue > 0) {
-                                // Validate against goal-specific ranges
-                                const minValue = getSliderMin();
-                                const maxValue = getSliderMax();
-
-                                let finalValue: string;
-                                if (numericValue >= minValue && numericValue <= maxValue) {
-                                  // Round to 1 decimal place to avoid precision issues
-                                  const roundedValue = Math.round(numericValue * 10) / 10;
-                                  const roundedValueStr = roundedValue.toString();
-                                  setTargetWeight(roundedValueStr);
-                                  finalValue = roundedValueStr;
-                                } else {
-                                  // Clamp to valid range and round
-                                  const clampedValue = Math.min(Math.max(numericValue, minValue), maxValue);
-                                  const roundedValue = Math.round(clampedValue * 10) / 10;
-                                  const clampedValueStr = roundedValue.toString();
-                                  setTargetWeight(clampedValueStr);
-                                  finalValue = clampedValueStr;
-                                }
+                                // Round to nearest 0.5 to match step increment
+                                const roundedValue = Math.round(numericValue * 2) / 2;
+                                const roundedValueStr = roundedValue.toString();
+                                setTargetWeight(roundedValueStr);
 
                                 // Save user-adjusted weight for this goal
                                 if (selectedGoal === 'lose-weight' || selectedGoal === 'gain-muscles') {
                                   setUserAdjustedWeights(prev => ({
                                     ...prev,
-                                    [selectedGoal]: finalValue
+                                    [selectedGoal]: roundedValueStr
                                   }));
                                 }
                               }
                             }}
-                            className="text-center w-24 h-8 font-bold"
+                            className={`text-center w-24 h-8 font-bold ${!isTargetWeightValid(targetWeightInput) && targetWeightInput !== '' ? 'border-red-500' : ''}`}
                             style={{
-                              backgroundColor: '#F5F5F5',
-                              border: 'solid 1px #CFCFCF',
+                              backgroundColor: !isTargetWeightValid(targetWeightInput) && targetWeightInput !== '' ? 'rgba(239, 68, 68, 0.1)' : '#F5F5F5',
+                              border: `solid 1px ${!isTargetWeightValid(targetWeightInput) && targetWeightInput !== '' ? '#EF4444' : '#CFCFCF'}`,
                               borderRadius: '12px',
                               fontSize: '14px'
                             }}
@@ -684,6 +684,29 @@ export default function GoalPage() {
                         </div>
                       </div>
                     </div>
+
+                    {/* Error message for target weight */}
+                    {!isTargetWeightValid(targetWeightInput) && targetWeightInput !== '' && (
+                      <div className="text-red-600 text-xs mt-1">
+                        {(() => {
+                          const numericValue = parseFloat(targetWeightInput);
+                          if (isNaN(numericValue) || numericValue <= 0) {
+                            return 'Please enter a valid weight';
+                          }
+                          const minValue = getSliderMin();
+                          const maxValue = getSliderMax();
+                          const currentWeight = getCurrentWeightInDisplayUnits();
+                          const unit = userData.unitSystem === 'metric' ? 'kg' : 'lbs';
+
+                          if (selectedGoal === 'lose-weight') {
+                            return `For weight loss, target must be between ${minValue.toFixed(1)} and ${currentWeight.toFixed(1)} ${unit}`;
+                          } else if (selectedGoal === 'gain-muscles') {
+                            return `For muscle gain, target must be between ${currentWeight.toFixed(1)} and ${maxValue.toFixed(1)} ${unit}`;
+                          }
+                          return `Target weight must be between ${minValue.toFixed(1)} and ${maxValue.toFixed(1)} ${unit}`;
+                        })()}
+                      </div>
+                    )}
 
                     {/* Target Weight Slider */}
                     <div className="relative">
@@ -717,8 +740,8 @@ export default function GoalPage() {
 
                           // Ensure the value is within the goal-specific range
                           const clampedValue = Math.min(Math.max(newValue, minValue), maxValue);
-                          // Round to 1 decimal place to avoid precision issues
-                          const roundedValue = Math.round(clampedValue * 10) / 10;
+                          // Round to nearest 0.5 to match step increment
+                          const roundedValue = Math.round(clampedValue * 2) / 2;
                           const clampedValueStr = roundedValue.toString();
 
                           setTargetWeight(clampedValueStr);
@@ -733,23 +756,23 @@ export default function GoalPage() {
                           }
                         }}
                         className="absolute inset-0 w-full h-6 opacity-0 cursor-pointer"
-                        step="0.1"
+                        step="0.5"
                       />
                     </div>
 
                     {/* Goal Direction Validation */}
-                    {selectedGoal === 'lose-weight' && parseFloat(targetWeight || '0') > getCurrentWeightInDisplayUnits() && (
+                    {selectedGoal === 'lose-weight' && parseFloat(targetWeight || '0') > getSliderMax() && (
                       <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mt-2">
                         <p className="text-sm text-orange-700">
-                          ⚠️ Your target weight is higher than your current weight. For weight loss, set a target below {formatWeight(getCurrentWeightInDisplayUnits(), userData.unitSystem)}.
+                          ⚠️ Your target weight is higher than your current weight. For weight loss, set a target below {getSliderMax().toFixed(1)} {userData.unitSystem === 'metric' ? 'kg' : 'lbs'}.
                         </p>
                       </div>
                     )}
 
-                    {selectedGoal === 'gain-muscles' && parseFloat(targetWeight || '0') < getCurrentWeightInDisplayUnits() && (
+                    {selectedGoal === 'gain-muscles' && parseFloat(targetWeight || '0') < getSliderMin() && (
                       <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mt-2">
                         <p className="text-sm text-orange-700">
-                          ⚠️ Your target weight is lower than your current weight. For muscle gain, set a target above {formatWeight(getCurrentWeightInDisplayUnits(), userData.unitSystem)}.
+                          ⚠️ Your target weight is lower than your current weight. For muscle gain, set a target above {getSliderMin().toFixed(1)} {userData.unitSystem === 'metric' ? 'kg' : 'lbs'}.
                         </p>
                       </div>
                     )}
@@ -766,11 +789,10 @@ export default function GoalPage() {
                         onFocus={() => setActivelyEditingProtein(true)}
                         onBlur={() => {
                           setActivelyEditingProtein(false);
-                          const value = parseFloat(proteinInput);
-                          if (!isNaN(value) && value >= 0.1 && value <= 5.0) {
+                          // Only update if valid, otherwise keep input to show error
+                          if (isProteinValid(proteinInput)) {
+                            const value = parseFloat(proteinInput);
                             setProteinPerKg(value);
-                          } else {
-                            setProteinInput(proteinPerKg.toString());
                           }
                         }}
                         onChange={(e) => {
@@ -780,10 +802,10 @@ export default function GoalPage() {
                             setProteinPerKg(value);
                           }
                         }}
-                        className="text-center w-20 h-8 font-bold"
+                        className={`text-center w-20 h-8 font-bold ${!isProteinValid(proteinInput) && proteinInput !== '' ? 'border-red-500' : ''}`}
                         style={{
-                          backgroundColor: '#F5F5F5',
-                          border: 'solid 1px #CFCFCF',
+                          backgroundColor: !isProteinValid(proteinInput) && proteinInput !== '' ? 'rgba(239, 68, 68, 0.1)' : '#F5F5F5',
+                          border: `solid 1px ${!isProteinValid(proteinInput) && proteinInput !== '' ? '#EF4444' : '#CFCFCF'}`,
                           borderRadius: '12px',
                           fontSize: '14px'
                         }}
@@ -793,6 +815,14 @@ export default function GoalPage() {
                         placeholder="1.0"
                       />
                     </div>
+
+                    {/* Error message for protein */}
+                    {!isProteinValid(proteinInput) && proteinInput !== '' && (
+                      <div className="text-red-600 text-xs mt-1">
+                        Protein intake must be between 0.1 and 5.0 grams per pound
+                      </div>
+                    )}
+
                     <p className="text-xs text-gray-500">
                       Adjust between 0.1-5.0g per pound (0.8-1.2g typical range)
                     </p>
@@ -1076,7 +1106,7 @@ export default function GoalPage() {
                             </p>
                             <button
                               className="text-xs font-medium text-green-700 hover:text-green-800 underline transition-colors"
-                              onClick={() => window.open('https://howtogetnshape.org', '_blank')}
+                              onClick={() => setIsEmailDialogOpen(true)}
                             >
                               Start the Free Fat‑Burn Video Series →
                             </button>
@@ -1119,11 +1149,11 @@ export default function GoalPage() {
                   // Store in localStorage for persistence
                   localStorage.setItem('userGoalData', JSON.stringify(goalData));
 
-                  // Open contact popup instead of showing alert
-                  setIsContactPopupOpen(true);
+                  // Open email dialog instead of contact popup
+                  setIsEmailDialogOpen(true);
                 }}
               >
-                Start Burning Fat Now
+                Start My Fat‑Burning Video Series
               </Button>
             </div>
           </CardContent>
@@ -1137,6 +1167,61 @@ export default function GoalPage() {
         }
         onSubmit={handleContactSubmit}
       />
+
+      {/* Email Dialog */}
+      {isEmailDialogOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full p-6 relative">
+            {/* Close button */}
+            <button
+              onClick={() => setIsEmailDialogOpen(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-xl"
+            >
+              ×
+            </button>
+
+            {/* Dialog content */}
+            <div className="space-y-4">
+              <h2 className="text-xl font-bold text-gray-800">
+                Yes! Show Me How to Count Calories Like a Pro!
+              </h2>
+
+              <p className="text-sm text-gray-600">
+                Enter your email to unlock the full Fat‑Burning Calorie‑Counting Master Class—a FREE video series every beginner and tracker needs. These lessons will give you the tools, confidence, and strategy to finally lose fat using a FREE app and a simple food scale.
+              </p>
+
+              <div className="space-y-3">
+                <div>
+                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    id="email"
+                    value={emailAddress}
+                    onChange={(e) => setEmailAddress(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    placeholder="Enter your email address"
+                  />
+                </div>
+
+                <button
+                  onClick={() => {
+                    // Handle email submission here
+                    console.log('Email submitted:', emailAddress);
+                    // You can add actual email submission logic here
+                    setIsEmailDialogOpen(false);
+                    setEmailAddress('');
+                  }}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-lg transition-colors"
+                >
+                  Start the Free Master Class →
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div >
   );
 }
