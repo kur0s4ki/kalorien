@@ -15,7 +15,8 @@ export async function POST(request: NextRequest) {
       proteinPerKg,
       targetWeight,
       isTargetWeightEnabled,
-      nutritionData
+      nutritionData,
+      savedProfiles
     } = body;
 
     if (!email || !userData || !calculations || !nutritionData) {
@@ -116,10 +117,75 @@ export async function POST(request: NextRequest) {
       return goals[goal as keyof typeof goals] || 'To Maintain Weight';
     };
 
-    // Get the macro data from nutritionData (this is what user actually sees in UI)
-    const proteins = nutritionData.macros.find((m: any) => m.name === 'Proteins') || { amount: 0, percentage: 0 };
-    const carbs = nutritionData.macros.find((m: any) => m.name === 'Carbohydrate') || { amount: 0, percentage: 0 };
-    const fats = nutritionData.macros.find((m: any) => m.name === 'Fats') || { amount: 0, percentage: 0 };
+    // Helper function to get profile data - use saved data if available, otherwise fallback to current
+    const getProfileData = (goalType: string) => {
+      // If we have saved data for this goal, use it
+      if (savedProfiles && savedProfiles[goalType as keyof typeof savedProfiles]) {
+        const saved = savedProfiles[goalType as keyof typeof savedProfiles];
+        return {
+          calories: saved.calories,
+          macros: {
+            proteins: { 
+              amount: saved.macros.find((m: any) => m.name === 'Proteins')?.amount || 0, 
+              percentage: saved.macros.find((m: any) => m.name === 'Proteins')?.percentage || 0 
+            },
+            carbs: { 
+              amount: saved.macros.find((m: any) => m.name === 'Carbohydrate')?.amount || 0, 
+              percentage: saved.macros.find((m: any) => m.name === 'Carbohydrate')?.percentage || 0 
+            },
+            fats: { 
+              amount: saved.macros.find((m: any) => m.name === 'Fats')?.amount || 0, 
+              percentage: saved.macros.find((m: any) => m.name === 'Fats')?.percentage || 0 
+            }
+          },
+          targetWeight: saved.targetWeight
+        };
+      }
+      
+      // Fallback: if this is the currently selected goal, use current nutritionData
+      if (goalType === selectedGoal) {
+        return {
+          calories: nutritionData.totalCalories,
+          macros: {
+            proteins: { 
+              amount: nutritionData.macros.find((m: any) => m.name === 'Proteins')?.amount || 0, 
+              percentage: nutritionData.macros.find((m: any) => m.name === 'Proteins')?.percentage || 0 
+            },
+            carbs: { 
+              amount: nutritionData.macros.find((m: any) => m.name === 'Carbohydrate')?.amount || 0, 
+              percentage: nutritionData.macros.find((m: any) => m.name === 'Carbohydrate')?.percentage || 0 
+            },
+            fats: { 
+              amount: nutritionData.macros.find((m: any) => m.name === 'Fats')?.amount || 0, 
+              percentage: nutritionData.macros.find((m: any) => m.name === 'Fats')?.percentage || 0 
+            }
+          },
+          targetWeight: isTargetWeightEnabled && targetWeight ? formatWeight(targetWeight, userData.unitSystem) : undefined
+        };
+      }
+      
+      // Final fallback: basic estimated values (this should rarely be used)
+      const estimatedCalories = goalType === 'lose-weight' ? 
+        Math.round(calculations.tdee * 0.8) : 
+        goalType === 'gain-muscles' ? 
+          Math.round(calculations.tdee * 1.15) : 
+          Math.round(calculations.tdee);
+          
+      return {
+        calories: estimatedCalories,
+        macros: {
+          proteins: { amount: Math.round(userData.weight * 2.2 * proteinPerKg), percentage: 25 },
+          carbs: { amount: Math.round(estimatedCalories * 0.4 / 4), percentage: 40 },
+          fats: { amount: Math.round(estimatedCalories * 0.25 / 9), percentage: 25 }
+        },
+        targetWeight: undefined
+      };
+    };
+
+    // Get data for all three profiles using saved UI data
+    const maintainData = getProfileData('stay-fit');
+    const loseData = getProfileData('lose-weight');
+    const gainData = getProfileData('gain-muscles');
 
     // Format target weight if enabled
     const formattedTargetWeight = isTargetWeightEnabled && targetWeight 
@@ -384,23 +450,23 @@ export async function POST(request: NextRequest) {
             <div class="data-grid">
               <div class="data-item">
                 <span class="data-label">Calories/Day:</span>
-                <span class="data-value">${formatCalories(Math.round(calculations.tdee))}</span>
+                <span class="data-value">${formatCalories(maintainData.calories)}</span>
               </div>
             </div>
             <div class="macro-section">
               <h3>Macronutrient Breakdown</h3>
               <div class="macro-grid">
                 <div class="macro-item">
-                  <div class="macro-value">${Math.round(userData.weight * proteinPerKg)}g</div>
-                  <div class="macro-label">Proteins (${Math.round((userData.weight * proteinPerKg * 4 / calculations.tdee) * 100)}%)</div>
+                  <div class="macro-value">${maintainData.macros.proteins.amount}g</div>
+                  <div class="macro-label">Proteins (${maintainData.macros.proteins.percentage}%)</div>
                 </div>
                 <div class="macro-item">
-                  <div class="macro-value">${Math.round((calculations.tdee - (userData.weight * proteinPerKg * 4)) * 0.48 / 4)}g</div>
-                  <div class="macro-label">Carbs (48%)</div>
+                  <div class="macro-value">${maintainData.macros.carbs.amount}g</div>
+                  <div class="macro-label">Carbs (${maintainData.macros.carbs.percentage}%)</div>
                 </div>
                 <div class="macro-item">
-                  <div class="macro-value">${Math.round((calculations.tdee - (userData.weight * proteinPerKg * 4)) * 0.24 / 9)}g</div>
-                  <div class="macro-label">Fats (24%)</div>
+                  <div class="macro-value">${maintainData.macros.fats.amount}g</div>
+                  <div class="macro-label">Fats (${maintainData.macros.fats.percentage}%)</div>
                 </div>
               </div>
             </div>
@@ -410,15 +476,15 @@ export async function POST(request: NextRequest) {
           <div class="section">
             <h2>📉 To Lose Weight @ ${proteinPerKg}g Protein/kg of Body Weight</h2>
             <div class="data-grid">
-              ${formattedTargetWeight ? `
+              ${loseData.targetWeight ? `
                 <div class="data-item">
                   <span class="data-label">Target Weight:</span>
-                  <span class="data-value">${formattedTargetWeight}</span>
+                  <span class="data-value">${loseData.targetWeight}</span>
                 </div>
               ` : ''}
               <div class="data-item">
                 <span class="data-label">Calories/Day:</span>
-                <span class="data-value">${selectedGoal === 'lose-weight' ? formatCalories(nutritionData.totalCalories) : formatCalories(Math.round(calculations.tdee * 0.8))}</span>
+                <span class="data-value">${formatCalories(loseData.calories)}</span>
               </div>
               <div class="data-item">
                 <span class="data-label">Expected Results:</span>
@@ -433,16 +499,16 @@ export async function POST(request: NextRequest) {
               <h3>📱 Set Your Calorie Counting App</h3>
               <div class="macro-grid">
                 <div class="macro-item">
-                  <div class="macro-value">${selectedGoal === 'lose-weight' ? proteins.amount : Math.round(userData.weight * proteinPerKg)}g</div>
-                  <div class="macro-label">Proteins (${selectedGoal === 'lose-weight' ? proteins.percentage : Math.round((userData.weight * proteinPerKg * 4 / (calculations.tdee * 0.8)) * 100)}%)</div>
+                  <div class="macro-value">${loseData.macros.proteins.amount}g</div>
+                  <div class="macro-label">Proteins (${loseData.macros.proteins.percentage}%)</div>
                 </div>
                 <div class="macro-item">
-                  <div class="macro-value">${selectedGoal === 'lose-weight' ? carbs.amount : Math.round(((calculations.tdee * 0.8) - (userData.weight * proteinPerKg * 4)) * 0.34 / 4)}g</div>
-                  <div class="macro-label">Carbs (${selectedGoal === 'lose-weight' ? carbs.percentage : 34}%)</div>
+                  <div class="macro-value">${loseData.macros.carbs.amount}g</div>
+                  <div class="macro-label">Carbs (${loseData.macros.carbs.percentage}%)</div>
                 </div>
                 <div class="macro-item">
-                  <div class="macro-value">${selectedGoal === 'lose-weight' ? fats.amount : Math.round(((calculations.tdee * 0.8) - (userData.weight * proteinPerKg * 4)) * 0.29 / 9)}g</div>
-                  <div class="macro-label">Fats (${selectedGoal === 'lose-weight' ? fats.percentage : 29}%)</div>
+                  <div class="macro-value">${loseData.macros.fats.amount}g</div>
+                  <div class="macro-label">Fats (${loseData.macros.fats.percentage}%)</div>
                 </div>
               </div>
             </div>
@@ -454,11 +520,11 @@ export async function POST(request: NextRequest) {
             <div class="data-grid">
               <div class="data-item">
                 <span class="data-label">Target Weight:</span>
-                <span class="data-value">${selectedGoal === 'gain-muscles' && formattedTargetWeight ? formattedTargetWeight : formatWeight(userData.weight * 1.1, userData.unitSystem)}</span>
+                <span class="data-value">${gainData.targetWeight || formatWeight(userData.weight * 1.1, userData.unitSystem)}</span>
               </div>
               <div class="data-item">
                 <span class="data-label">Calories/Day:</span>
-                <span class="data-value">${selectedGoal === 'gain-muscles' ? formatCalories(nutritionData.totalCalories) : formatCalories(Math.round(calculations.tdee * 1.15))}</span>
+                <span class="data-value">${formatCalories(gainData.calories)}</span>
               </div>
               <div class="data-item">
                 <span class="data-label">Expected Results:</span>
@@ -473,16 +539,16 @@ export async function POST(request: NextRequest) {
               <h3>📱 Set Your Calorie Counting App</h3>
               <div class="macro-grid">
                 <div class="macro-item">
-                  <div class="macro-value">${selectedGoal === 'gain-muscles' ? proteins.amount : Math.round(userData.weight * proteinPerKg)}g</div>
-                  <div class="macro-label">Proteins (${selectedGoal === 'gain-muscles' ? proteins.percentage : Math.round((userData.weight * proteinPerKg * 4 / (calculations.tdee * 1.15)) * 100)}%)</div>
+                  <div class="macro-value">${gainData.macros.proteins.amount}g</div>
+                  <div class="macro-label">Proteins (${gainData.macros.proteins.percentage}%)</div>
                 </div>
                 <div class="macro-item">
-                  <div class="macro-value">${selectedGoal === 'gain-muscles' ? carbs.amount : Math.round(((calculations.tdee * 1.15) - (userData.weight * proteinPerKg * 4)) * 0.44 / 4)}g</div>
-                  <div class="macro-label">Carbs (${selectedGoal === 'gain-muscles' ? carbs.percentage : 44}%)</div>
+                  <div class="macro-value">${gainData.macros.carbs.amount}g</div>
+                  <div class="macro-label">Carbs (${gainData.macros.carbs.percentage}%)</div>
                 </div>
                 <div class="macro-item">
-                  <div class="macro-value">${selectedGoal === 'gain-muscles' ? fats.amount : Math.round(((calculations.tdee * 1.15) - (userData.weight * proteinPerKg * 4)) * 0.25 / 9)}g</div>
-                  <div class="macro-label">Fats (${selectedGoal === 'gain-muscles' ? fats.percentage : 25}%)</div>
+                  <div class="macro-value">${gainData.macros.fats.amount}g</div>
+                  <div class="macro-label">Fats (${gainData.macros.fats.percentage}%)</div>
                 </div>
               </div>
             </div>

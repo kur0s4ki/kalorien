@@ -43,6 +43,25 @@ export default function GoalPage() {
     'lose-weight'?: string;
     'gain-muscles'?: string;
   }>({});
+
+  // Store exact UI data for each profile as user switches between them
+  const [savedProfiles, setSavedProfiles] = useState<{
+    'stay-fit'?: {
+      calories: number;
+      macros: Array<{name: string; amount: number; percentage: number; unit: string; color: string}>;
+      targetWeight?: string;
+    };
+    'lose-weight'?: {
+      calories: number;
+      macros: Array<{name: string; amount: number; percentage: number; unit: string; color: string}>;
+      targetWeight?: string;
+    };
+    'gain-muscles'?: {
+      calories: number;
+      macros: Array<{name: string; amount: number; percentage: number; unit: string; color: string}>;
+      targetWeight?: string;
+    };
+  }>({});
   // Local state for protein input (for display purposes)
   const [proteinInput, setProteinInput] = useState('');
   const [activelyEditingProtein, setActivelyEditingProtein] = useState(false);
@@ -334,6 +353,20 @@ export default function GoalPage() {
     ]
   };
 
+  // Function to save current profile data
+  const saveCurrentProfileData = () => {
+    const currentTargetWeight = isTargetWeightEnabled ? formatWeight(getTargetWeightInKg(), userData.unitSystem) : undefined;
+    
+    setSavedProfiles(prev => ({
+      ...prev,
+      [selectedGoal]: {
+        calories: nutritionData.totalCalories,
+        macros: nutritionData.macros,
+        targetWeight: currentTargetWeight
+      }
+    }));
+  };
+
   // 🔍 CONTROLLED LOGGING - Prevent Cascading Triggers
   useEffect(() => {
     // Set initialization flag after first render
@@ -350,16 +383,34 @@ export default function GoalPage() {
     return () => clearTimeout(timer);
   }, []);
 
-  // 🔍 CONTROLLED LOGGING - Only After Initialization
+  // Save current profile data before switching goals
   useEffect(() => {
     if (isInitialized.current) {
+      // Save current profile data before the goal changes
+      const timer = setTimeout(() => {
+        saveCurrentProfileData();
+      }, 100);
+      
       console.log('='.repeat(80));
       console.log('🎯 GOAL SELECTION CHANGED');
       console.log('='.repeat(80));
       console.log('📊 Selected Goal:', selectedGoal);
       logCompleteData();
+      
+      return () => clearTimeout(timer);
     }
   }, [selectedGoal]);
+
+  // Save profile data when nutrition data changes (protein slider, target weight, etc.)
+  useEffect(() => {
+    if (isInitialized.current) {
+      const timer = setTimeout(() => {
+        saveCurrentProfileData();
+      }, 500); // Small delay to avoid too frequent saves
+      
+      return () => clearTimeout(timer);
+    }
+  }, [nutritionData.totalCalories, proteinPerKg, isTargetWeightEnabled, targetWeight]);
 
   useEffect(() => {
     if (isInitialized.current) {
@@ -1225,18 +1276,19 @@ export default function GoalPage() {
                           headers: {
                             'Content-Type': 'application/json',
                           },
-                          body: JSON.stringify({
-                            email: emailAddress,
-                            userData,
-                            calculations,
-                            targetWeightCalculations,
-                            // Add the actual UI data that user sees
-                            selectedGoal,
-                            proteinPerKg,
-                            targetWeight: isTargetWeightEnabled ? getTargetWeightInKg() : null,
-                            isTargetWeightEnabled,
-                            nutritionData // This contains the actual calories and macros the user sees
-                          }),
+                                                  body: JSON.stringify({
+                          email: emailAddress,
+                          userData,
+                          calculations,
+                          targetWeightCalculations,
+                          // Add the actual UI data that user sees
+                          selectedGoal,
+                          proteinPerKg,
+                          targetWeight: isTargetWeightEnabled ? getTargetWeightInKg() : null,
+                          isTargetWeightEnabled,
+                          nutritionData, // Current profile data
+                          savedProfiles // All saved profile data with exact UI values
+                        }),
                         });
                         
                         if (response.ok) {
