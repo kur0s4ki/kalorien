@@ -190,8 +190,8 @@ export async function POST(request: NextRequest) {
           }
           .data-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
+            grid-template-columns: 1fr;
+            gap: 8px;
             margin-bottom: 15px;
           }
           .data-item {
