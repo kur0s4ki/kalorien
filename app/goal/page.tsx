@@ -1122,6 +1122,8 @@ export default function GoalPage() {
 
             </div>
 
+
+
             {/* Navigation Buttons - Always at bottom */}
             <div className="pt-6 flex justify-between flex-shrink-0 md:border-t md:border-gray-200 md:mt-6 md:pt-4">
               <Button
@@ -1205,18 +1207,50 @@ export default function GoalPage() {
                   />
                 </div>
 
-                <button
-                  onClick={() => {
-                    // Handle email submission here
-                    console.log('Email submitted:', emailAddress);
-                    // You can add actual email submission logic here
-                    setIsEmailDialogOpen(false);
-                    setEmailAddress('');
-                  }}
-                  className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-lg transition-colors"
-                >
-                  Start the Free Master Class →
-                </button>
+                                 <button
+                   onClick={async () => {
+                     if (!emailAddress.trim()) {
+                       alert('Please enter a valid email address');
+                       return;
+                     }
+                     
+                     try {
+                       // Send email using the API
+                       const response = await fetch('/api/send-email', {
+                         method: 'POST',
+                         headers: {
+                           'Content-Type': 'application/json',
+                         },
+                         body: JSON.stringify({
+                           email: emailAddress,
+                           userData,
+                           calculations,
+                           targetWeightCalculations
+                         }),
+                       });
+                       
+                       if (response.ok) {
+                         const result = await response.json();
+                         console.log('Email sent successfully:', result);
+                         alert('Email sent successfully! Check your inbox for your fitness assessment results.');
+                       } else {
+                         const error = await response.json();
+                         console.error('Failed to send email:', error);
+                         alert('Failed to send email. Please try again.');
+                       }
+                     } catch (error) {
+                       console.error('Error sending email:', error);
+                       alert('Error sending email. Please try again.');
+                     }
+                     
+                     // Close dialog and reset email
+                     setIsEmailDialogOpen(false);
+                     setEmailAddress('');
+                   }}
+                   className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-lg transition-colors"
+                 >
+                   Start the Free Master Class →
+                 </button>
               </div>
             </div>
           </div>

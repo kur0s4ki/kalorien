@@ -287,6 +287,8 @@ export default function ResultsPage() {
 
             </div>
 
+
+
             {/* Navigation Buttons - Always at bottom */}
             <div className="pt-6 flex justify-between flex-shrink-0 md:border-t md:border-gray-200 md:mt-4 md:pt-4">
               <Button
