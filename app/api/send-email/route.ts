@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
 
     // Helper function to format calories
     const formatCalories = (calories: number) => {
-      return calories.toLocaleString();
+      return Math.round(calories).toLocaleString('en-US');
     };
 
     // Helper function to format activity level
