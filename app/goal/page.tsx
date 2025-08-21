@@ -32,6 +32,8 @@ export default function GoalPage() {
   const [isContactPopupOpen, setIsContactPopupOpen] = useState(false);
   const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
   const [emailAddress, setEmailAddress] = useState('');
+  const [isEmailSending, setIsEmailSending] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
 
   // Local state for target weight input (for display purposes)
   const [targetWeightInput, setTargetWeightInput] = useState('');
@@ -1207,50 +1209,82 @@ export default function GoalPage() {
                   />
                 </div>
 
-                                 <button
-                   onClick={async () => {
-                     if (!emailAddress.trim()) {
-                       alert('Please enter a valid email address');
-                       return;
-                     }
-                     
-                     try {
-                       // Send email using the API
-                       const response = await fetch('/api/send-email', {
-                         method: 'POST',
-                         headers: {
-                           'Content-Type': 'application/json',
-                         },
-                         body: JSON.stringify({
-                           email: emailAddress,
-                           userData,
-                           calculations,
-                           targetWeightCalculations
-                         }),
-                       });
-                       
-                       if (response.ok) {
-                         const result = await response.json();
-                         console.log('Email sent successfully:', result);
-                         alert('Email sent successfully! Check your inbox for your fitness assessment results.');
-                       } else {
-                         const error = await response.json();
-                         console.error('Failed to send email:', error);
-                         alert('Failed to send email. Please try again.');
-                       }
-                     } catch (error) {
-                       console.error('Error sending email:', error);
-                       alert('Error sending email. Please try again.');
-                     }
-                     
-                     // Close dialog and reset email
-                     setIsEmailDialogOpen(false);
-                     setEmailAddress('');
-                   }}
-                   className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-4 rounded-lg transition-colors"
-                 >
-                   Start the Free Master Class →
-                 </button>
+                                                   <button
+                    onClick={async () => {
+                      if (!emailAddress.trim()) {
+                        return; // Don't proceed if email is empty
+                      }
+                      
+                      setIsEmailSending(true);
+                      setEmailSent(false);
+                      
+                      try {
+                        // Send email using the API
+                        const response = await fetch('/api/send-email', {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/json',
+                          },
+                          body: JSON.stringify({
+                            email: emailAddress,
+                            userData,
+                            calculations,
+                            targetWeightCalculations,
+                            // Add the actual UI data that user sees
+                            selectedGoal,
+                            proteinPerKg,
+                            targetWeight: isTargetWeightEnabled ? getTargetWeightInKg() : null,
+                            isTargetWeightEnabled,
+                            nutritionData // This contains the actual calories and macros the user sees
+                          }),
+                        });
+                        
+                        if (response.ok) {
+                          const result = await response.json();
+                          console.log('Email sent successfully:', result);
+                          setEmailSent(true);
+                          setIsEmailSending(false);
+                          
+                          // Auto close after 3 seconds
+                          setTimeout(() => {
+                            setIsEmailDialogOpen(false);
+                            setEmailAddress('');
+                            setEmailSent(false);
+                          }, 3000);
+                        } else {
+                          const error = await response.json();
+                          console.error('Failed to send email:', error);
+                          setIsEmailSending(false);
+                          // Could add error state here if needed
+                        }
+                      } catch (error) {
+                        console.error('Error sending email:', error);
+                        setIsEmailSending(false);
+                        // Could add error state here if needed
+                      }
+                    }}
+                    disabled={isEmailSending || emailSent || !emailAddress.trim()}
+                    className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center"
+                  >
+                    {isEmailSending ? (
+                      <>
+                        <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Sending...
+                      </>
+                    ) : emailSent ? (
+                      <>
+                        <svg className="mr-2 h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                        Email Sent Successfully!
+                      </>
+                    ) : (
+                      'Start the Free Master Class →'
+                    )}
+                  </button>
               </div>
             </div>
           </div>

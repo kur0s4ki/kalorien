@@ -10,10 +10,15 @@ export async function POST(request: NextRequest) {
       email, 
       userData, 
       calculations,
-      targetWeightCalculations 
+      targetWeightCalculations,
+      selectedGoal,
+      proteinPerKg,
+      targetWeight,
+      isTargetWeightEnabled,
+      nutritionData
     } = body;
 
-    if (!email || !userData || !calculations) {
+    if (!email || !userData || !calculations || !nutritionData) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
@@ -101,38 +106,25 @@ export async function POST(request: NextRequest) {
       return 'Your waist-to-hip ratio is within a healthy range.';
     };
 
-    // Calculate macro percentages
-    const calculateMacros = (calories: number, proteinG: number) => {
-      const proteinCalories = proteinG * 4;
-      const proteinPercent = Math.round((proteinCalories / calories) * 100);
-      const remainingCalories = calories - proteinCalories;
-      const fatG = Math.round((remainingCalories * 0.25) / 9);
-      const fatCalories = fatG * 9;
-      const carbG = Math.round((remainingCalories - fatCalories) / 4);
-      const fatPercent = Math.round((fatCalories / calories) * 100);
-      const carbPercent = Math.round((carbG * 4 / calories) * 100);
-      
-      return { proteinG, proteinPercent, carbG, carbPercent, fatG, fatPercent };
-    };
-
-    // Get target weight calculations
-    const getTargetWeightCalcs = () => {
-      if (!targetWeightCalculations) return null;
-      
-      const targetWeightKg = targetWeightCalculations.goalRecommendations.bestTargetWeight;
-      const targetWeightFormatted = formatWeight(targetWeightKg, userData.unitSystem);
-      const targetCalories = targetWeightCalculations.goalRecommendations.rapidWeightLossCalories;
-      const proteinG = targetWeightCalculations.goalRecommendations.proteinIntakeForTarget;
-      
-      const macros = calculateMacros(targetCalories, proteinG);
-      return {
-        targetWeight: targetWeightFormatted,
-        calories: targetCalories,
-        ...macros
+    // Helper function to get goal title
+    const getGoalTitle = (goal: string) => {
+      const goals = {
+        'stay-fit': 'To Maintain Weight',
+        'lose-weight': 'To Lose Weight', 
+        'gain-muscles': 'To Gain Weight'
       };
+      return goals[goal as keyof typeof goals] || 'To Maintain Weight';
     };
 
-    const targetWeightCalcs = getTargetWeightCalcs();
+    // Get the macro data from nutritionData (this is what user actually sees in UI)
+    const proteins = nutritionData.macros.find((m: any) => m.name === 'Proteins') || { amount: 0, percentage: 0 };
+    const carbs = nutritionData.macros.find((m: any) => m.name === 'Carbohydrate') || { amount: 0, percentage: 0 };
+    const fats = nutritionData.macros.find((m: any) => m.name === 'Fats') || { amount: 0, percentage: 0 };
+
+    // Format target weight if enabled
+    const formattedTargetWeight = isTargetWeightEnabled && targetWeight 
+      ? formatWeight(targetWeight, userData.unitSystem) 
+      : null;
 
     // Create email HTML content
     const emailHtml = `
@@ -386,43 +378,47 @@ export async function POST(request: NextRequest) {
             </div>
           </div>
 
+          <!-- Maintain Weight Section -->
           <div class="section">
-            <h2>🔥 To Maintain Weight @ 1g Protein/lb of Body Weight</h2>
+            <h2>🔥 To Maintain Weight @ ${proteinPerKg}g Protein/kg of Body Weight</h2>
             <div class="data-grid">
               <div class="data-item">
                 <span class="data-label">Calories/Day:</span>
-                <span class="data-value">${formatCalories(calculations.tdee)}</span>
+                <span class="data-value">${formatCalories(Math.round(calculations.tdee))}</span>
               </div>
             </div>
             <div class="macro-section">
               <h3>Macronutrient Breakdown</h3>
               <div class="macro-grid">
                 <div class="macro-item">
-                  <div class="macro-value">${Math.round(calculations.proteinIntake)}g</div>
-                  <div class="macro-label">Proteins (23%)</div>
+                  <div class="macro-value">${Math.round(userData.weight * proteinPerKg)}g</div>
+                  <div class="macro-label">Proteins (${Math.round((userData.weight * proteinPerKg * 4 / calculations.tdee) * 100)}%)</div>
                 </div>
                 <div class="macro-item">
-                  <div class="macro-value">${Math.round((calculations.tdee - (calculations.proteinIntake * 4)) * 0.48 / 4)}g</div>
+                  <div class="macro-value">${Math.round((calculations.tdee - (userData.weight * proteinPerKg * 4)) * 0.48 / 4)}g</div>
                   <div class="macro-label">Carbs (48%)</div>
                 </div>
                 <div class="macro-item">
-                  <div class="macro-value">${Math.round((calculations.tdee - (calculations.proteinIntake * 4)) * 0.24 / 9)}g</div>
+                  <div class="macro-value">${Math.round((calculations.tdee - (userData.weight * proteinPerKg * 4)) * 0.24 / 9)}g</div>
                   <div class="macro-label">Fats (24%)</div>
                 </div>
               </div>
             </div>
           </div>
 
+          <!-- Lose Weight Section -->
           <div class="section">
-            <h2>📉 To Lose Weight @ 1g Protein/lb of Body Weight</h2>
+            <h2>📉 To Lose Weight @ ${proteinPerKg}g Protein/kg of Body Weight</h2>
             <div class="data-grid">
-              <div class="data-item">
-                <span class="data-label">Target Weight:</span>
-                <span class="data-value">${targetWeightCalcs ? targetWeightCalcs.targetWeight : 'N/A'}</span>
-              </div>
+              ${formattedTargetWeight ? `
+                <div class="data-item">
+                  <span class="data-label">Target Weight:</span>
+                  <span class="data-value">${formattedTargetWeight}</span>
+                </div>
+              ` : ''}
               <div class="data-item">
                 <span class="data-label">Calories/Day:</span>
-                <span class="data-value">${targetWeightCalcs ? formatCalories(targetWeightCalcs.calories) : 'N/A'}</span>
+                <span class="data-value">${selectedGoal === 'lose-weight' ? formatCalories(nutritionData.totalCalories) : formatCalories(Math.round(calculations.tdee * 0.8))}</span>
               </div>
               <div class="data-item">
                 <span class="data-label">Expected Results:</span>
@@ -433,37 +429,36 @@ export async function POST(request: NextRequest) {
                 <span class="data-value">${calculations.waterWeightFluctuation.toFixed(1)} lbs</span>
               </div>
             </div>
-            ${targetWeightCalcs ? `
-              <div class="macro-section">
-                <h3>📱 Set Your Calorie Counting App</h3>
-                <div class="macro-grid">
-                  <div class="macro-item">
-                    <div class="macro-value">${targetWeightCalcs.proteinG}g</div>
-                    <div class="macro-label">Proteins (${targetWeightCalcs.proteinPercent}%)</div>
-                  </div>
-                  <div class="macro-item">
-                    <div class="macro-value">${targetWeightCalcs.carbG}g</div>
-                    <div class="macro-label">Carbs (${targetWeightCalcs.carbPercent}%)</div>
-                  </div>
-                  <div class="macro-item">
-                    <div class="macro-value">${targetWeightCalcs.fatG}g</div>
-                    <div class="macro-label">Fats (${targetWeightCalcs.fatPercent}%)</div>
-                  </div>
+            <div class="macro-section">
+              <h3>📱 Set Your Calorie Counting App</h3>
+              <div class="macro-grid">
+                <div class="macro-item">
+                  <div class="macro-value">${selectedGoal === 'lose-weight' ? proteins.amount : Math.round(userData.weight * proteinPerKg)}g</div>
+                  <div class="macro-label">Proteins (${selectedGoal === 'lose-weight' ? proteins.percentage : Math.round((userData.weight * proteinPerKg * 4 / (calculations.tdee * 0.8)) * 100)}%)</div>
+                </div>
+                <div class="macro-item">
+                  <div class="macro-value">${selectedGoal === 'lose-weight' ? carbs.amount : Math.round(((calculations.tdee * 0.8) - (userData.weight * proteinPerKg * 4)) * 0.34 / 4)}g</div>
+                  <div class="macro-label">Carbs (${selectedGoal === 'lose-weight' ? carbs.percentage : 34}%)</div>
+                </div>
+                <div class="macro-item">
+                  <div class="macro-value">${selectedGoal === 'lose-weight' ? fats.amount : Math.round(((calculations.tdee * 0.8) - (userData.weight * proteinPerKg * 4)) * 0.29 / 9)}g</div>
+                  <div class="macro-label">Fats (${selectedGoal === 'lose-weight' ? fats.percentage : 29}%)</div>
                 </div>
               </div>
-            ` : ''}
+            </div>
           </div>
 
+          <!-- Gain Weight Section -->
           <div class="section">
-            <h2>📈 To Gain Weight @ 1g Protein/lb of Body Weight</h2>
+            <h2>📈 To Gain Weight @ ${proteinPerKg}g Protein/kg of Body Weight</h2>
             <div class="data-grid">
               <div class="data-item">
                 <span class="data-label">Target Weight:</span>
-                <span class="data-value">${formatWeight(userData.weight * 1.15, userData.unitSystem)}</span>
+                <span class="data-value">${selectedGoal === 'gain-muscles' && formattedTargetWeight ? formattedTargetWeight : formatWeight(userData.weight * 1.1, userData.unitSystem)}</span>
               </div>
               <div class="data-item">
                 <span class="data-label">Calories/Day:</span>
-                <span class="data-value">${formatCalories(calculations.tdee + 300)}</span>
+                <span class="data-value">${selectedGoal === 'gain-muscles' ? formatCalories(nutritionData.totalCalories) : formatCalories(Math.round(calculations.tdee * 1.15))}</span>
               </div>
               <div class="data-item">
                 <span class="data-label">Expected Results:</span>
@@ -478,16 +473,16 @@ export async function POST(request: NextRequest) {
               <h3>📱 Set Your Calorie Counting App</h3>
               <div class="macro-grid">
                 <div class="macro-item">
-                  <div class="macro-value">${Math.round(calculations.proteinIntake * 1.15)}g</div>
-                  <div class="macro-label">Proteins (26%)</div>
+                  <div class="macro-value">${selectedGoal === 'gain-muscles' ? proteins.amount : Math.round(userData.weight * proteinPerKg)}g</div>
+                  <div class="macro-label">Proteins (${selectedGoal === 'gain-muscles' ? proteins.percentage : Math.round((userData.weight * proteinPerKg * 4 / (calculations.tdee * 1.15)) * 100)}%)</div>
                 </div>
                 <div class="macro-item">
-                  <div class="macro-value">${Math.round((calculations.tdee + 300 - (calculations.proteinIntake * 1.15 * 4)) * 0.44 / 4)}g</div>
-                  <div class="macro-label">Carbs (44%)</div>
+                  <div class="macro-value">${selectedGoal === 'gain-muscles' ? carbs.amount : Math.round(((calculations.tdee * 1.15) - (userData.weight * proteinPerKg * 4)) * 0.44 / 4)}g</div>
+                  <div class="macro-label">Carbs (${selectedGoal === 'gain-muscles' ? carbs.percentage : 44}%)</div>
                 </div>
                 <div class="macro-item">
-                  <div class="macro-value">${Math.round((calculations.tdee + 300 - (calculations.proteinIntake * 1.15 * 4)) * 0.25 / 9)}g</div>
-                  <div class="macro-label">Fats (25%)</div>
+                  <div class="macro-value">${selectedGoal === 'gain-muscles' ? fats.amount : Math.round(((calculations.tdee * 1.15) - (userData.weight * proteinPerKg * 4)) * 0.25 / 9)}g</div>
+                  <div class="macro-label">Fats (${selectedGoal === 'gain-muscles' ? fats.percentage : 25}%)</div>
                 </div>
               </div>
             </div>
@@ -502,26 +497,207 @@ export async function POST(request: NextRequest) {
       </html>
     `;
 
-    // Send email using Resend
-    const { data, error } = await resend.emails.send({
-      from: 'Fitness Calculator <contact@howtogetinshape.org>',
-      to: [email],
-      subject: 'Your Fitness Assessment Results',
-      html: emailHtml,
-    });
+    // Create welcome email HTML content
+    const welcomeEmailHtml = `
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Welcome! Your Calorie Targets Are Ready</title>
+        <style>
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f9f9f9;
+          }
+          .container {
+            background-color: white;
+            border-radius: 12px;
+            padding: 40px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+          }
+          .header {
+            text-align: center;
+            margin-bottom: 30px;
+          }
+          .header h1 {
+            color: #31860A;
+            margin: 0 0 10px 0;
+            font-size: 28px;
+            font-weight: 700;
+          }
+          .content {
+            margin-bottom: 30px;
+          }
+          .greeting {
+            font-size: 18px;
+            font-weight: 600;
+            color: #31860A;
+            margin-bottom: 20px;
+          }
+          .paragraph {
+            margin-bottom: 20px;
+            font-size: 16px;
+            line-height: 1.7;
+          }
+          .pro-tip {
+            background-color: #f0f8e8;
+            border-left: 4px solid #31860A;
+            padding: 15px 20px;
+            margin: 25px 0;
+            border-radius: 0 8px 8px 0;
+          }
+          .pro-tip strong {
+            color: #31860A;
+          }
+          .expectations {
+            background-color: #f8f9fa;
+            padding: 25px;
+            border-radius: 8px;
+            margin: 25px 0;
+          }
+          .expectations h3 {
+            color: #31860A;
+            margin: 0 0 15px 0;
+            font-size: 18px;
+          }
+          .expectations ul {
+            margin: 0;
+            padding-left: 20px;
+          }
+          .expectations li {
+            margin-bottom: 8px;
+            font-size: 15px;
+          }
+          .signature {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 2px solid #e9ecef;
+          }
+          .signature p {
+            margin: 5px 0;
+          }
+          .signature .name {
+            font-weight: 600;
+            color: #31860A;
+            font-size: 16px;
+          }
+          .footer {
+            text-align: center;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #e9ecef;
+            color: #666;
+            font-size: 14px;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>🎯 Welcome to HowToGetInShape.org</h1>
+            <p style="color: #666; font-size: 16px;">Your Calorie Targets Are Ready!</p>
+          </div>
+          
+          <div class="content">
+            <div class="greeting">Hello, My Calorie Counting Friend,</div>
+            
+            <div class="paragraph">
+              Welcome to <strong>HowToGetInShape.org</strong>—and thank you for using the free calorie calculator!
+            </div>
+            
+            <div class="paragraph">
+              Here are your personal results, keep this email so you can track how far you've come during your weight-loss journey.
+            </div>
+            
+            <div class="pro-tip">
+              <strong>Pro tip:</strong> Whenever you lose 10 pounds, just re-enter your numbers to adjust your calorie target for optimal fat-burning.
+            </div>
+            
+            <div class="paragraph">
+              Your free video tutorial series is on its way—check your inbox! These videos will teach you to master calorie counting using a free app and a food scale, starting today.
+            </div>
+            
+            <div class="expectations">
+              <h3>Here's what to expect from me:</h3>
+              <ul>
+                <li>Actionable video lessons in your inbox</li>
+                <li>Weekly tips to stay on track</li>
+                <li>Success stories that inspire</li>
+                <li>Occasional reminders that keep you accountable</li>
+              </ul>
+            </div>
+            
+            <div class="paragraph">
+              I'm excited to help you build the confidence, clarity, and results you've been chasing.
+            </div>
+          </div>
+          
+          <div class="signature">
+            <p>To your success,</p>
+            <p class="name">Calorie Counting Guy</p>
+          </div>
+          
+          <div class="footer">
+            <p>© ${new Date().getFullYear()} HowToGetInShape.org</p>
+            <p>You're receiving this because you used our free calorie calculator.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
 
-    if (error) {
-      console.error('Resend error:', error);
+    // Send both emails using Resend
+    try {
+      // Send the fitness assessment results email
+      const { data: resultsData, error: resultsError } = await resend.emails.send({
+        from: 'Calorie Counting Guy <contact@howtogetinshape.org>',
+        to: [email],
+        subject: `Your Fitness Assessment Results - ${formattedDate}`,
+        html: emailHtml,
+      });
+
+      if (resultsError) {
+        console.error('Results email sending error:', resultsError);
+        return NextResponse.json(
+          { error: 'Failed to send results email' },
+          { status: 500 }
+        );
+      }
+
+      // Send the welcome email
+      const { data: welcomeData, error: welcomeError } = await resend.emails.send({
+        from: 'Calorie Counting Guy <contact@howtogetinshape.org>',
+        to: [email],
+        subject: 'Welcome! Your Calorie Targets Are Ready',
+        html: welcomeEmailHtml,
+      });
+
+      if (welcomeError) {
+        console.error('Welcome email sending error:', welcomeError);
+        // Don't fail the entire request if welcome email fails
+        // The main results email was successful
+      }
+
+      return NextResponse.json({
+        success: true,
+        resultsMessageId: resultsData?.id,
+        welcomeMessageId: welcomeData?.id,
+        message: 'Emails sent successfully'
+      });
+
+    } catch (emailError) {
+      console.error('Email sending error:', emailError);
       return NextResponse.json(
-        { error: 'Failed to send email' },
+        { error: 'Failed to send emails' },
         { status: 500 }
       );
     }
-
-    return NextResponse.json({ 
-      success: true, 
-      messageId: data?.id 
-    });
 
   } catch (error) {
     console.error('Email sending error:', error);
