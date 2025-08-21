@@ -280,13 +280,13 @@ export default function GoalPage() {
   const getMacroDistribution = () => {
     switch (selectedGoal) {
       case 'lose-weight':
-        return { protein: 30, carbs: 35, fats: 30, fiber: 5 }; // High protein for satiety
+        return { protein: 30, carbs: 40, fats: 30 }; // High protein for satiety
       case 'gain-muscles':
-        return { protein: 25, carbs: 45, fats: 25, fiber: 5 }; // High carbs for energy
+        return { protein: 25, carbs: 50, fats: 25 }; // High carbs for energy
       case 'stay-fit':
-        return { protein: 20, carbs: 50, fats: 25, fiber: 5 }; // Balanced distribution
+        return { protein: 20, carbs: 55, fats: 25 }; // Balanced distribution
       default:
-        return { protein: 20, carbs: 50, fats: 25, fiber: 5 };
+        return { protein: 20, carbs: 55, fats: 25 };
     }
   };
 
@@ -309,13 +309,11 @@ export default function GoalPage() {
   // Calculate remaining percentages proportionally
   const remainingPercentage = 100 - proteinPercentage;
   const baseFatPercentage = macroDistribution.fats;
-  const baseFiberPercentage = macroDistribution.fiber;
   const baseCarbPercentage = macroDistribution.carbs;
 
   // Scale non-protein macros proportionally to fit remaining percentage
-  const totalNonProtein = baseFatPercentage + baseFiberPercentage + baseCarbPercentage;
+  const totalNonProtein = baseFatPercentage + baseCarbPercentage;
   const fatPercentage = (baseFatPercentage / totalNonProtein) * remainingPercentage;
-  const fiberPercentage = (baseFiberPercentage / totalNonProtein) * remainingPercentage;
   const carbPercentage = (baseCarbPercentage / totalNonProtein) * remainingPercentage;
 
   const nutritionData = {
@@ -342,13 +340,6 @@ export default function GoalPage() {
         unit: 'g',
         percentage: Math.round(fatPercentage),
         color: '#FFC107'
-      },
-      {
-        name: 'Fiber',
-        amount: Math.round((calorieTarget * fiberPercentage / 100) / 2), // Fiber provides ~2 cal/g, not 4
-        unit: 'g',
-        percentage: Math.round(fiberPercentage),
-        color: '#8BC34A'
       }
     ]
   };
@@ -621,15 +612,7 @@ export default function GoalPage() {
                             strokeDashoffset={`-${(proteinPercentage + carbPercentage) * 2.51}`}
                             style={{ transition: 'stroke-dasharray 0.5s ease-in-out, stroke-dashoffset 0.5s ease-in-out' }}
                           />
-                          <circle
-                            cx="48" cy="48" r="40"
-                            fill="none"
-                            stroke="#8BC34A"
-                            strokeWidth="12"
-                            strokeDasharray={`${fiberPercentage * 2.51} 251`}
-                            strokeDashoffset={`-${(proteinPercentage + carbPercentage + fatPercentage) * 2.51}`}
-                            style={{ transition: 'stroke-dasharray 0.5s ease-in-out, stroke-dashoffset 0.5s ease-in-out' }}
-                          />
+
                         </svg>
                       </div>
                       <div>
@@ -915,15 +898,7 @@ export default function GoalPage() {
                             strokeDashoffset={`-${(proteinPercentage + carbPercentage) * 2.51}`}
                             style={{ transition: 'stroke-dasharray 0.5s ease-in-out, stroke-dashoffset 0.5s ease-in-out' }}
                           />
-                          <circle
-                            cx="48" cy="48" r="40"
-                            fill="none"
-                            stroke="#8BC34A"
-                            strokeWidth="12"
-                            strokeDasharray={`${fiberPercentage * 2.51} 251`}
-                            strokeDashoffset={`-${(proteinPercentage + carbPercentage + fatPercentage) * 2.51}`}
-                            style={{ transition: 'stroke-dasharray 0.5s ease-in-out, stroke-dashoffset 0.5s ease-in-out' }}
-                          />
+
                         </svg>
                       </div>
                       <div>
