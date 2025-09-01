@@ -718,7 +718,7 @@ export async function POST(request: NextRequest) {
       </html>
     `;
 
-    // Send both emails using Resend
+    // Send fitness assessment results email
     try {
       // Send the fitness assessment results email
       const { data: resultsData, error: resultsError } = await resend.emails.send({
@@ -736,31 +736,49 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Send the welcome email
-      const { data: welcomeData, error: welcomeError } = await resend.emails.send({
-        from: 'Calorie Counting Guy <contact@howtogetinshape.org>',
-        to: [email],
-        subject: 'Welcome! Your Calorie Targets Are Ready',
-        html: welcomeEmailHtml,
-      });
+      // Send the welcome email (DISABLED - keeping code for future use)
+      // const { data: welcomeData, error: welcomeError } = await resend.emails.send({
+      //   from: 'Calorie Counting Guy <contact@howtogetinshape.org>',
+      //   to: [email],
+      //   subject: 'Welcome! Your Calorie Targets Are Ready',
+      //   html: welcomeEmailHtml,
+      // });
 
-      if (welcomeError) {
-        console.error('Welcome email sending error:', welcomeError);
-        // Don't fail the entire request if welcome email fails
-        // The main results email was successful
+      // if (welcomeError) {
+      //   console.error('Welcome email sending error:', welcomeError);
+      //   // Don't fail the entire request if welcome email fails
+      //   // The main results email was successful
+      // }
+
+      // Trigger Zapier webhook after successful email send
+      try {
+        console.log('Zapier webhook triggered');
+        await fetch('https://hooks.zapier.com/hooks/catch/3914460/uhq09zy/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email: email,
+            timestamp: new Date().toISOString(),
+            messageId: resultsData?.id
+          })
+        });
+      } catch (zapierError) {
+        console.error('Zapier webhook error:', zapierError);
+        // Don't fail the entire request if webhook fails
       }
 
       return NextResponse.json({
         success: true,
         resultsMessageId: resultsData?.id,
-        welcomeMessageId: welcomeData?.id,
-        message: 'Emails sent successfully'
+        message: 'Email sent successfully'
       });
 
     } catch (emailError) {
       console.error('Email sending error:', emailError);
       return NextResponse.json(
-        { error: 'Failed to send emails' },
+        { error: 'Failed to send email' },
         { status: 500 }
       );
     }
