@@ -34,12 +34,12 @@ export async function POST(request: NextRequest) {
       day: 'numeric'
     });
 
-    // Helper function to format weight based on unit system
+    // Helper function to format weight based on unit system (matches UI exactly)
     const formatWeight = (weightKg: number, unitSystem: string) => {
       if (unitSystem === 'imperial') {
-        return `${Math.round(weightKg * 2.20462)} lbs`;
+        return `${(weightKg * 2.20462).toFixed(1)} lbs`;
       }
-      return `${Math.round(weightKg)} kg`;
+      return `${weightKg.toFixed(1)} kg`;
     };
 
     // Helper function to format height based on unit system
@@ -435,7 +435,7 @@ export async function POST(request: NextRequest) {
               </div>
               <div class="data-item">
                 <span class="data-label">Optimal Target Weight:</span>
-                <span class="data-value">${formatWeight(calculations.idealWeightRange.target, userData.unitSystem)}</span>
+                <span class="data-value">${formatWeight(calculations.goalRecommendations.bestTargetWeight, userData.unitSystem)}</span>
               </div>
               <div class="data-item">
                 <span class="data-label">Ideal Waist Size:</span>
@@ -492,7 +492,7 @@ export async function POST(request: NextRequest) {
               </div>
               <div class="data-item">
                 <span class="data-label">Water Weight Fluctuation:</span>
-                <span class="data-value">${calculations.waterWeightFluctuation.toFixed(1)} lbs</span>
+                <span class="data-value">±${formatWeight(calculations.waterWeightFluctuation, userData.unitSystem)}</span>
               </div>
             </div>
             <div class="macro-section">
@@ -532,7 +532,7 @@ export async function POST(request: NextRequest) {
               </div>
               <div class="data-item">
                 <span class="data-label">Water Weight Fluctuation:</span>
-                <span class="data-value">${(calculations.waterWeightFluctuation - 0.1).toFixed(1)} lbs</span>
+                <span class="data-value">±${formatWeight(calculations.waterWeightFluctuation, userData.unitSystem)}</span>
               </div>
             </div>
             <div class="macro-section">
