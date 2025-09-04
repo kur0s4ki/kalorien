@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
         'high-activity': 'High Activity',
         'very-high-activity': 'Very High Activity'
       };
-      return activityMap[level] || level;
+      return activityMap[level] || 'Not specified';
     };
 
     // Helper function to format gender
@@ -117,66 +117,37 @@ export async function POST(request: NextRequest) {
       return goals[goal as keyof typeof goals] || 'To Maintain Weight';
     };
 
-    // Helper function to get profile data - use saved data if available, otherwise fallback to current
     const getProfileData = (goalType: string) => {
-      // If we have saved data for this goal, use it
-      if (savedProfiles && savedProfiles[goalType as keyof typeof savedProfiles]) {
-        const saved = savedProfiles[goalType as keyof typeof savedProfiles];
+      const profile = savedProfiles?.[goalType as keyof typeof savedProfiles];
+
+      if (profile) {
         return {
-          calories: saved.calories,
+          calories: profile.calories,
           macros: {
             proteins: { 
-              amount: saved.macros.find((m: any) => m.name === 'Proteins')?.amount || 0, 
-              percentage: saved.macros.find((m: any) => m.name === 'Proteins')?.percentage || 0 
+              amount: profile.macros.find((m: any) => m.name === 'Proteins')?.amount || 0, 
+              percentage: profile.macros.find((m: any) => m.name === 'Proteins')?.percentage || 0 
             },
             carbs: { 
-              amount: saved.macros.find((m: any) => m.name === 'Carbohydrate')?.amount || 0, 
-              percentage: saved.macros.find((m: any) => m.name === 'Carbohydrate')?.percentage || 0 
+              amount: profile.macros.find((m: any) => m.name === 'Carbohydrate')?.amount || 0, 
+              percentage: profile.macros.find((m: any) => m.name === 'Carbohydrate')?.percentage || 0 
             },
             fats: { 
-              amount: saved.macros.find((m: any) => m.name === 'Fats')?.amount || 0, 
-              percentage: saved.macros.find((m: any) => m.name === 'Fats')?.percentage || 0 
+              amount: profile.macros.find((m: any) => m.name === 'Fats')?.amount || 0, 
+              percentage: profile.macros.find((m: any) => m.name === 'Fats')?.percentage || 0 
             }
           },
-          targetWeight: saved.targetWeight
+          targetWeight: profile.targetWeight
         };
       }
-      
-      // Fallback: if this is the currently selected goal, use current nutritionData
-      if (goalType === selectedGoal) {
-        return {
-          calories: nutritionData.totalCalories,
-          macros: {
-            proteins: { 
-              amount: nutritionData.macros.find((m: any) => m.name === 'Proteins')?.amount || 0, 
-              percentage: nutritionData.macros.find((m: any) => m.name === 'Proteins')?.percentage || 0 
-            },
-            carbs: { 
-              amount: nutritionData.macros.find((m: any) => m.name === 'Carbohydrate')?.amount || 0, 
-              percentage: nutritionData.macros.find((m: any) => m.name === 'Carbohydrate')?.percentage || 0 
-            },
-            fats: { 
-              amount: nutritionData.macros.find((m: any) => m.name === 'Fats')?.amount || 0, 
-              percentage: nutritionData.macros.find((m: any) => m.name === 'Fats')?.percentage || 0 
-            }
-          },
-          targetWeight: isTargetWeightEnabled && targetWeight ? formatWeight(targetWeight, userData.unitSystem) : undefined
-        };
-      }
-      
-      // Final fallback: basic estimated values (this should rarely be used)
-      const estimatedCalories = goalType === 'lose-weight' ? 
-        Math.round(calculations.tdee * 0.8) : 
-        goalType === 'gain-muscles' ? 
-          Math.round(calculations.tdee * 1.15) : 
-          Math.round(calculations.tdee);
-          
+
+      // If no data is found for a profile, return a default empty state.
       return {
-        calories: estimatedCalories,
+        calories: 0,
         macros: {
-          proteins: { amount: Math.round(userData.weight * 2.2 * proteinPerKg), percentage: 25 },
-          carbs: { amount: Math.round(estimatedCalories * 0.4 / 4), percentage: 40 },
-          fats: { amount: Math.round(estimatedCalories * 0.25 / 9), percentage: 25 }
+          proteins: { amount: 0, percentage: 0 },
+          carbs: { amount: 0, percentage: 0 },
+          fats: { amount: 0, percentage: 0 }
         },
         targetWeight: undefined
       };
@@ -446,7 +417,7 @@ export async function POST(request: NextRequest) {
 
           <!-- Maintain Weight Section -->
           <div class="section">
-            <h2>🔥 To Maintain Weight @ ${proteinPerKg}g Protein/kg of Body Weight</h2>
+            <h2>🔥 To Maintain Weight @ ${proteinPerKg}g Protein/lb of Body Weight</h2>
             <div class="data-grid">
               <div class="data-item">
                 <span class="data-label">Calories/Day:</span>
@@ -474,7 +445,7 @@ export async function POST(request: NextRequest) {
 
           <!-- Lose Weight Section -->
           <div class="section">
-            <h2>📉 To Lose Weight @ ${proteinPerKg}g Protein/kg of Body Weight</h2>
+            <h2>📉 To Lose Weight @ ${proteinPerKg}g Protein/lb of Body Weight</h2>
             <div class="data-grid">
               ${loseData.targetWeight ? `
                 <div class="data-item">
@@ -516,7 +487,7 @@ export async function POST(request: NextRequest) {
 
           <!-- Gain Weight Section -->
           <div class="section">
-            <h2>📈 To Gain Weight @ ${proteinPerKg}g Protein/kg of Body Weight</h2>
+            <h2>📈 To Gain Weight @ ${proteinPerKg}g Protein/lb of Body Weight</h2>
             <div class="data-grid">
               <div class="data-item">
                 <span class="data-label">Target Weight:</span>

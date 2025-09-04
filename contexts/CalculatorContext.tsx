@@ -55,7 +55,19 @@ interface CalculatorProviderProps {
 }
 
 export const CalculatorProvider: React.FC<CalculatorProviderProps> = ({ children }) => {
-  const [userData, setUserData] = useState<UserData>(defaultUserData);
+  const [userData, setUserData] = useState<UserData>(() => {
+    if (typeof window !== 'undefined') {
+      const savedData = localStorage.getItem('userData');
+      if (savedData) {
+        return JSON.parse(savedData);
+      }
+    }
+    return defaultUserData;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('userData', JSON.stringify(userData));
+  }, [userData]);
   const [calculations, setCalculations] = useState<CalculationResults | null>(null);
   const [proteinPerKg, setProteinPerKg] = useState<number>(1.0); // Default protein intake (1g per lb)
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
