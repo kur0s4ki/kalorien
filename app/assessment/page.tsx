@@ -78,13 +78,7 @@ export default function HealthDataForm() {
 
 
 
-    // Redirect to intro page on first load
-    useEffect(() => {
-        const hasVisitedIntro = sessionStorage.getItem('hasVisitedIntro');
-        if (!hasVisitedIntro) {
-            router.push('/intro');
-        }
-    }, [router]);
+    // No need to redirect to intro page since we removed the intro step
 
     // Local state for input fields (for display purposes)
     const [ageInput, setAgeInput] = useState('');
