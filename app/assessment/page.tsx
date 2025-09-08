@@ -199,7 +199,7 @@ export default function HealthDataForm() {
                 <Card className="shadow-lg" style={{ backgroundColor: '#F5F5F5' }}>
                     <CardHeader className="text-center pb-6">
                         <CardTitle className="text-2xl font-bold text-gray-800">
-                            Health Assessment
+                            Calorie Expenditure Assessment
                         </CardTitle>
                         <p className="text-gray-600 mt-2">
                             Please fill in your information to get personalized health insights

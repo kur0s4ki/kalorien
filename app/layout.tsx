@@ -6,8 +6,8 @@ import { CalculatorProvider } from '@/contexts/CalculatorContext';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Health Calculator - Educational Tool Only',
-  description: 'Educational health and fitness calculator. Results are estimates only and not medical advice. Consult healthcare professionals before making dietary changes.',
+  title: 'Calorie Expenditure Calculator',
+  description: 'Educational calorie expenditure calculator. Results are estimates only and not medical advice. Consult healthcare professionals before making dietary changes.',
 };
 
 export default function RootLayout({
