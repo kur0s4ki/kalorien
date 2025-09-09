@@ -57,10 +57,9 @@ interface CalculatorProviderProps {
 export const CalculatorProvider: React.FC<CalculatorProviderProps> = ({ children }) => {
   const [userData, setUserData] = useState<UserData>(() => {
     if (typeof window !== 'undefined') {
-      const savedData = localStorage.getItem('userData');
-      if (savedData) {
-        return JSON.parse(savedData);
-      }
+      // Clear localStorage on page refresh/initial load
+      localStorage.removeItem('userData');
+      localStorage.removeItem('userGoalData');
     }
     return defaultUserData;
   });
