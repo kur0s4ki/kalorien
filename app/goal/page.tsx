@@ -148,6 +148,52 @@ export default function GoalPage() {
     }
   }, [proteinPerKg, activelyEditingProtein]);
 
+  // Calculate realistic target weight based on calorie deficit/surplus
+  const calculateRealisticTargetWeight = (goal: string, currentWeightDisplay: number) => {
+    if (!calculations) return currentWeightDisplay;
+
+    if (goal === 'lose-weight') {
+      // Calculate expected weight loss based on calorie deficit
+      // slowLoss deficit is typically 400 calories/day
+      const deficit = calculations.calorieTargets.maintenance - calculations.calorieTargets.slowLoss;
+      // 1 pound of fat = ~3500 calories, assume 16-20 weeks for realistic timeline
+      const weeksForGoal = 18; // 4.5 months - realistic sustainable timeline
+      const expectedWeightLoss = (deficit * 7 * weeksForGoal) / 3500; // in pounds
+
+      // Convert to display units if needed
+      let weightLossInDisplayUnits = expectedWeightLoss;
+      if (userData.unitSystem === 'metric') {
+        weightLossInDisplayUnits = expectedWeightLoss / 2.20462; // Convert to kg
+      }
+
+      const targetWeight = currentWeightDisplay - weightLossInDisplayUnits;
+      // Ensure target is within reasonable bounds
+      const minTarget = currentWeightDisplay * 0.8; // Don't go below 80% of current weight
+      return Math.max(Math.round(targetWeight * 2) / 2, minTarget); // Round to nearest 0.5
+
+    } else if (goal === 'gain-muscles') {
+      // Calculate expected weight gain based on calorie surplus
+      // muscleGain surplus is typically 300 calories/day
+      const surplus = calculations.calorieTargets.muscleGain - calculations.calorieTargets.maintenance;
+      // Assume 16-20 weeks for realistic muscle gain timeline
+      const weeksForGoal = 18; // 4.5 months
+      const expectedWeightGain = (surplus * 7 * weeksForGoal) / 3500; // in pounds
+
+      // Convert to display units if needed
+      let weightGainInDisplayUnits = expectedWeightGain;
+      if (userData.unitSystem === 'metric') {
+        weightGainInDisplayUnits = expectedWeightGain / 2.20462; // Convert to kg
+      }
+
+      const targetWeight = currentWeightDisplay + weightGainInDisplayUnits;
+      // Ensure target is within reasonable bounds
+      const maxTarget = currentWeightDisplay * 1.2; // Don't go above 120% of current weight
+      return Math.min(Math.round(targetWeight * 2) / 2, maxTarget); // Round to nearest 0.5
+    }
+
+    return currentWeightDisplay; // Fallback
+  };
+
   // Auto-disable target weight for "Maintain" goal and enable for others
   // Preserve user-adjusted target weights when switching between goals
   useEffect(() => {
@@ -176,9 +222,10 @@ export default function GoalPage() {
         setTargetWeight(savedWeight);
         setTargetWeightInput(savedWeight);
       } else {
-        // First time on this goal, set to current weight
-        setTargetWeight(currentWeightInDisplayUnits.toString());
-        setTargetWeightInput(currentWeightInDisplayUnits.toString());
+        // First time on this goal, calculate realistic target weight based on goal calories
+        const realisticTargetWeight = calculateRealisticTargetWeight(selectedGoal, currentWeightInDisplayUnits);
+        setTargetWeight(realisticTargetWeight.toString());
+        setTargetWeightInput(realisticTargetWeight.toString());
       }
     }
   }, [selectedGoal, isTargetWeightEnabled, setIsTargetWeightEnabled, userData.weight, userData.height, userAdjustedWeights]);
@@ -498,12 +545,13 @@ export default function GoalPage() {
                       key={goal.id}
                       onClick={() => {
                         setSelectedGoal(goal.id);
-                        // Immediately reset target weight to current weight when switching goals
-                        // This ensures the slider doesn't maintain values from previous selections
+                        // Calculate realistic target weight when switching goals
+                        // This ensures the slider shows a weight that corresponds to the calorie target
                         if (goal.id !== 'stay-fit') {
                           const currentWeightInDisplayUnits = getCurrentWeightInDisplayUnits();
-                          setTargetWeight(currentWeightInDisplayUnits.toString());
-                          setTargetWeightInput(currentWeightInDisplayUnits.toString());
+                          const realisticTargetWeight = calculateRealisticTargetWeight(goal.id, currentWeightInDisplayUnits);
+                          setTargetWeight(realisticTargetWeight.toString());
+                          setTargetWeightInput(realisticTargetWeight.toString());
                         }
                       }}
                       className={`flex-1 py-3 rounded-lg font-medium transition-all duration-200 ${goal.active
