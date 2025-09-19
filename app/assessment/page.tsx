@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { useCalculator } from '@/contexts/CalculatorContext';
+import { useConfig } from '@/contexts/ConfigContext';
 
 import { CircumferenceInput } from '@/components/ui/circumference-input';
 import { HeightInput } from '@/components/ui/height-input';
@@ -28,6 +29,7 @@ const bodyTypes = [
 export default function HealthDataForm() {
     const router = useRouter();
     const { userData, updateUserData, validationErrors, fieldErrors, isDataValid, calculations, forceCalculation, measurementsOptional, setMeasurementsOptional } = useCalculator();
+    const { config } = useConfig();
 
     // Helper function to get activity level display name
     const getActivityLevelDisplayName = (value: string) => {
@@ -199,10 +201,10 @@ export default function HealthDataForm() {
                 <Card className="shadow-lg" style={{ backgroundColor: '#F5F5F5' }}>
                     <CardHeader className="text-center pb-6">
                         <CardTitle className="text-2xl font-bold text-gray-800">
-                            Calorie Expenditure Assessment
+                            {config.assessment_title || 'Calorie Expenditure Assessment'}
                         </CardTitle>
                         <p className="text-gray-600 mt-2">
-                            Please fill in your information to get personalized health insights
+                            {config.assessment_description || 'Please fill in your information to get personalized health insights'}
                         </p>
                     </CardHeader>
                     <CardContent className="space-y-6">

@@ -6,10 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Popup } from '@/components/ui/popup';
 import { useCalculator } from '@/contexts/CalculatorContext';
+import { useConfig } from '@/contexts/ConfigContext';
 
 export default function ResultsPage() {
   const router = useRouter();
   const { userData, calculations } = useCalculator();
+  const { config } = useConfig();
   const [activePopup, setActivePopup] = useState<'basal' | 'bmi' | 'whr' | 'print' | null>(null);
 
   // Redirect to home if calculations are missing (direct navigation or refresh)
@@ -124,7 +126,7 @@ export default function ResultsPage() {
         <Card className="shadow-lg w-full h-full flex flex-col md:h-auto" style={{ backgroundColor: '#F5F5F5' }}>
           <CardHeader className="text-center pb-6 flex-shrink-0">
             <CardTitle className="text-2xl font-bold text-gray-800">
-              Your results
+              {config.results_title || 'Your Results'}
             </CardTitle>
           </CardHeader>
           <CardContent className="flex-1 flex flex-col overflow-y-auto md:overflow-y-visible md:space-y-4">

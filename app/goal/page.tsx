@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 import { Input } from '@/components/ui/input';
 import { useCalculator } from '@/contexts/CalculatorContext';
+import { useConfig } from '@/contexts/ConfigContext';
 import { formatWeight, formatLength } from '@/lib/units';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TrendingUp, Apple } from 'lucide-react';
@@ -13,6 +14,7 @@ import { ContactPopup } from '@/components/ui/contact-popup';
 import { useRouter } from 'next/navigation';
 
 export default function GoalPage() {
+  const { config } = useConfig();
   const {
     userData,
     calculations,
@@ -481,7 +483,7 @@ export default function GoalPage() {
         <Card className="shadow-lg w-full h-full flex flex-col md:h-auto" style={{ backgroundColor: '#F5F5F5' }}>
           <CardHeader className="text-center pb-6 flex-shrink-0">
             <CardTitle className="text-2xl font-bold text-gray-800">
-              Your Goal
+              {config.goal_title || 'Your Goal'}
             </CardTitle>
           </CardHeader>
           <CardContent className="flex-1 flex flex-col overflow-y-auto md:overflow-y-visible md:space-y-6">
