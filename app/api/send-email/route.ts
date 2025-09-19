@@ -723,7 +723,6 @@ export async function POST(request: NextRequest) {
 
       // Trigger Zapier webhook after successful email send
       try {
-        console.log('Zapier webhook triggered');
         await fetch('https://hooks.zapier.com/hooks/catch/3914460/uhq09zy/', {
           method: 'POST',
           headers: {

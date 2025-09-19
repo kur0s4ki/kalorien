@@ -232,9 +232,6 @@ export default function GoalPage() {
 
   const handleContactSubmit = (contactData: { name: string; email: string }) => {
     // Here you would typically send the data to your backend
-    console.log('Contact data submitted:', contactData);
-    console.log('User data:', userData);
-    console.log('Calculations:', calculations);
 
     // Simulate API call
     setTimeout(() => {
@@ -261,19 +258,8 @@ export default function GoalPage() {
           const targetWeightKg = getTargetWeightInKg();
           const weightDifference = currentWeightKg - targetWeightKg; // Positive for weight loss
 
-          // Debug logging
-          console.log('🔍 LOSE WEIGHT DEBUG:', {
-            currentWeightKg,
-            targetWeightKg,
-            weightDifference,
-            toleranceCheck: Math.abs(weightDifference) < 0.1,
-            maintenanceCalories: currentCalculations.calorieTargets.maintenance,
-            slowLossCalories: currentCalculations.calorieTargets.slowLoss
-          });
-
           // If target weight equals current weight, return maintenance calories
           if (Math.abs(weightDifference) < 0.5) { // Allow tolerance for unit conversion differences (~1 lb)
-            console.log('✅ RETURNING MAINTENANCE CALORIES FOR LOSE WEIGHT');
             return currentCalculations.calorieTargets.maintenance;
           }
 
@@ -302,19 +288,8 @@ export default function GoalPage() {
           const targetWeightKg = getTargetWeightInKg();
           const weightDifference = targetWeightKg - currentWeightKg;
 
-          // Debug logging
-          console.log('🔍 GAIN MUSCLES DEBUG:', {
-            currentWeightKg,
-            targetWeightKg,
-            weightDifference,
-            toleranceCheck: Math.abs(weightDifference) < 0.1,
-            maintenanceCalories: currentCalculations.calorieTargets.maintenance,
-            muscleGainCalories: currentCalculations.calorieTargets.muscleGain
-          });
-
           // If target weight equals current weight, return maintenance calories
           if (Math.abs(weightDifference) < 0.5) { // Allow tolerance for unit conversion differences (~1 lb)
-            console.log('✅ RETURNING MAINTENANCE CALORIES FOR GAIN MUSCLES');
             return currentCalculations.calorieTargets.maintenance;
           }
 
@@ -343,22 +318,12 @@ export default function GoalPage() {
   const getTargetWeightInKg = () => {
     const targetValue = parseFloat(targetWeight || '0');
     if (isNaN(targetValue) || targetValue <= 0) {
-      console.log('🔍 getTargetWeightInKg: Fallback to current weight', userData.weight);
       return userData.weight; // Fallback to current weight
     }
     if (userData.unitSystem === 'imperial') {
       const convertedValue = targetValue / 2.20462;
-      console.log('🔍 getTargetWeightInKg: Imperial conversion', {
-        targetValue,
-        convertedValue,
-        userData_weight: userData.weight
-      });
       return convertedValue; // Convert lbs to kg
     }
-    console.log('🔍 getTargetWeightInKg: Metric value', {
-      targetValue,
-      userData_weight: userData.weight
-    });
     return targetValue; // Already in kg
   };
 
@@ -448,16 +413,12 @@ export default function GoalPage() {
     }));
   };
 
-  // 🔍 CONTROLLED LOGGING - Prevent Cascading Triggers
+  // Initialization flag
   useEffect(() => {
     // Set initialization flag after first render
     const timer = setTimeout(() => {
       if (!isInitialized.current) {
         isInitialized.current = true;
-        console.log('='.repeat(80));
-        console.log('🎯 GOAL PAGE - INITIAL LOAD COMPLETE');
-        console.log('='.repeat(80));
-        logCompleteData();
       }
     }, 100); // Small delay to prevent cascade
 
@@ -471,13 +432,7 @@ export default function GoalPage() {
       const timer = setTimeout(() => {
         saveCurrentProfileData();
       }, 100);
-      
-      console.log('='.repeat(80));
-      console.log('🎯 GOAL SELECTION CHANGED');
-      console.log('='.repeat(80));
-      console.log('📊 Selected Goal:', selectedGoal);
-      logCompleteData();
-      
+
       return () => clearTimeout(timer);
     }
   }, [selectedGoal]);
@@ -493,53 +448,9 @@ export default function GoalPage() {
     }
   }, [nutritionData.totalCalories, proteinPerKg, isTargetWeightEnabled, targetWeight]);
 
-  useEffect(() => {
-    if (isInitialized.current) {
-      console.log('='.repeat(80));
-      console.log('🎯 TARGET WEIGHT CHANGED');
-      console.log('='.repeat(80));
-      console.log('📊 Target Weight Enabled:', isTargetWeightEnabled);
-      console.log('📊 Target Weight Value:', targetWeight);
-      logCompleteData();
-    }
-  }, [targetWeight, isTargetWeightEnabled]);
 
 
 
-  // 🔍 COMPREHENSIVE LOGGING FUNCTION
-  const logCompleteData = () => {
-    console.log('🚀 GOAL PAGE - COMPLETE DATA ANALYSIS');
-    console.log('='.repeat(80));
-
-    // Always use current weight calculations for basic metrics (Phase 2 logic)
-    const currentCalculations = calculations;
-
-    if (currentCalculations) {
-      console.log('🔥 Energy Calculations (Current Weight Metabolism):', {
-        bmr: `${Math.round(currentCalculations.bmr)} calories/day`,
-        tdee: `${Math.round(currentCalculations.tdee)} calories/day`
-      });
-
-      console.log('🎯 Calorie Targets (Goal-Based):', {
-        maintenance: `${Math.round(currentCalculations.calorieTargets.maintenance)} calories/day`,
-        slowLoss: `${Math.round(currentCalculations.calorieTargets.slowLoss)} calories/day`,
-        rapidLoss: `${Math.round(currentCalculations.calorieTargets.rapidLoss)} calories/day`,
-        muscleGain: `${Math.round(currentCalculations.calorieTargets.muscleGain)} calories/day`
-      });
-
-      console.log('💪 Body Composition:', {
-        bmi: `${currentCalculations.bmi.value.toFixed(1)} (${currentCalculations.bmi.category})`,
-        bodyFat: userData.bodyFat ? `${userData.bodyFat}%` : 'Not provided'
-      });
-
-      console.log('💧 Additional Metrics:', {
-        waterWeightFluctuation: currentCalculations.waterWeightFluctuation ? `${(currentCalculations.waterWeightFluctuation * 2.20462).toFixed(1)} lbs` : 'Not calculated',
-        proteinIntake: currentCalculations.proteinIntake ? `${currentCalculations.proteinIntake.toFixed(1)}g (legacy - now using custom)` : 'Not calculated'
-      });
-    } else {
-      console.log('❌ No calculations available');
-    }
-  };
 
   const goals = [
     { id: 'lose-weight', label: 'Lose', active: selectedGoal === 'lose-weight' },
@@ -1359,7 +1270,6 @@ export default function GoalPage() {
                         
                         if (response.ok) {
                           const result = await response.json();
-                          console.log('Email sent successfully:', result);
                           setEmailSent(true);
                           setIsEmailSending(false);
                           
