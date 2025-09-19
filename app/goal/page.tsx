@@ -261,6 +261,22 @@ export default function GoalPage() {
           const targetWeightKg = getTargetWeightInKg();
           const weightDifference = currentWeightKg - targetWeightKg; // Positive for weight loss
 
+          // Debug logging
+          console.log('🔍 LOSE WEIGHT DEBUG:', {
+            currentWeightKg,
+            targetWeightKg,
+            weightDifference,
+            toleranceCheck: Math.abs(weightDifference) < 0.1,
+            maintenanceCalories: currentCalculations.calorieTargets.maintenance,
+            slowLossCalories: currentCalculations.calorieTargets.slowLoss
+          });
+
+          // If target weight equals current weight, return maintenance calories
+          if (Math.abs(weightDifference) < 0.5) { // Allow tolerance for unit conversion differences (~1 lb)
+            console.log('✅ RETURNING MAINTENANCE CALORIES FOR LOSE WEIGHT');
+            return currentCalculations.calorieTargets.maintenance;
+          }
+
           // Base weight loss calories
           let lossCalories = currentCalculations.calorieTargets.slowLoss;
 
@@ -285,6 +301,22 @@ export default function GoalPage() {
           const currentWeightKg = userData.weight;
           const targetWeightKg = getTargetWeightInKg();
           const weightDifference = targetWeightKg - currentWeightKg;
+
+          // Debug logging
+          console.log('🔍 GAIN MUSCLES DEBUG:', {
+            currentWeightKg,
+            targetWeightKg,
+            weightDifference,
+            toleranceCheck: Math.abs(weightDifference) < 0.1,
+            maintenanceCalories: currentCalculations.calorieTargets.maintenance,
+            muscleGainCalories: currentCalculations.calorieTargets.muscleGain
+          });
+
+          // If target weight equals current weight, return maintenance calories
+          if (Math.abs(weightDifference) < 0.5) { // Allow tolerance for unit conversion differences (~1 lb)
+            console.log('✅ RETURNING MAINTENANCE CALORIES FOR GAIN MUSCLES');
+            return currentCalculations.calorieTargets.maintenance;
+          }
 
           // Base muscle gain calories
           let gainCalories = currentCalculations.calorieTargets.muscleGain;
@@ -311,11 +343,22 @@ export default function GoalPage() {
   const getTargetWeightInKg = () => {
     const targetValue = parseFloat(targetWeight || '0');
     if (isNaN(targetValue) || targetValue <= 0) {
+      console.log('🔍 getTargetWeightInKg: Fallback to current weight', userData.weight);
       return userData.weight; // Fallback to current weight
     }
     if (userData.unitSystem === 'imperial') {
-      return targetValue / 2.20462; // Convert lbs to kg
+      const convertedValue = targetValue / 2.20462;
+      console.log('🔍 getTargetWeightInKg: Imperial conversion', {
+        targetValue,
+        convertedValue,
+        userData_weight: userData.weight
+      });
+      return convertedValue; // Convert lbs to kg
     }
+    console.log('🔍 getTargetWeightInKg: Metric value', {
+      targetValue,
+      userData_weight: userData.weight
+    });
     return targetValue; // Already in kg
   };
 
