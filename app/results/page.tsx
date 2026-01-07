@@ -121,7 +121,7 @@ export default function ResultsPage() {
   };
 
   return (
-    <div className="h-screen bg-gray-50 flex items-center justify-center overflow-hidden md:min-h-screen md:bg-gray-50 md:flex-none md:items-start md:overflow-visible">
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center overflow-hidden md:min-h-screen md:bg-gray-50 md:flex-none md:items-start md:overflow-visible">
       <div className="max-w-2xl mx-auto w-full h-full md:h-auto md:p-4">
         <Card className="shadow-lg w-full h-full flex flex-col md:h-auto" style={{ backgroundColor: '#F5F5F5' }}>
           <CardHeader className="text-center pb-6 flex-shrink-0">

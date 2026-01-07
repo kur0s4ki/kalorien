@@ -50,17 +50,17 @@ export default function GoalPage() {
   const [savedProfiles, setSavedProfiles] = useState<{
     'stay-fit'?: {
       calories: number;
-      macros: Array<{name: string; amount: number; percentage: number; unit: string; color: string}>;
+      macros: Array<{ name: string; amount: number; percentage: number; unit: string; color: string }>;
       targetWeight?: string;
     };
     'lose-weight'?: {
       calories: number;
-      macros: Array<{name: string; amount: number; percentage: number; unit: string; color: string}>;
+      macros: Array<{ name: string; amount: number; percentage: number; unit: string; color: string }>;
       targetWeight?: string;
     };
     'gain-muscles'?: {
       calories: number;
-      macros: Array<{name: string; amount: number; percentage: number; unit: string; color: string}>;
+      macros: Array<{ name: string; amount: number; percentage: number; unit: string; color: string }>;
       targetWeight?: string;
     };
   }>({});
@@ -425,7 +425,7 @@ export default function GoalPage() {
   // Function to save current profile data
   const saveCurrentProfileData = () => {
     const currentTargetWeight = isTargetWeightEnabled ? formatWeight(getTargetWeightInKg(), userData.unitSystem) : undefined;
-    
+
     setSavedProfiles(prev => ({
       ...prev,
       [selectedGoal]: {
@@ -499,7 +499,7 @@ export default function GoalPage() {
   }
 
   return (
-    <div className="h-screen bg-gray-50 flex items-center justify-center overflow-hidden md:min-h-screen md:bg-gray-50 md:flex-none md:items-start md:overflow-visible">
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center overflow-hidden md:min-h-screen md:bg-gray-50 md:flex-none md:items-start md:overflow-visible">
       <div className="max-w-2xl mx-auto w-full h-full md:h-auto md:p-4">
         <Card className="shadow-lg w-full h-full flex flex-col md:h-auto" style={{ backgroundColor: '#F5F5F5' }}>
           <CardHeader className="text-center pb-6 flex-shrink-0">
@@ -1173,21 +1173,21 @@ export default function GoalPage() {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div className="bg-white rounded-lg p-3 border border-gray-200">
                       <h5 className="text-sm font-medium text-gray-600 mb-2">Your Ideal Weight Should Be Between</h5>
-                      <div className="text-lg font-bold text-gray-800">
+                      <div className="text-md font-bold text-gray-800">
                         {formatWeight(calculations.idealWeightRange.lower, userData.unitSystem)} - {formatWeight(calculations.idealWeightRange.upper, userData.unitSystem)}
                       </div>
                       <p className="text-xs text-gray-500 mt-1">Healthy weight range for your height</p>
                     </div>
                     <div className="bg-white rounded-lg p-3 border border-gray-200">
                       <h5 className="text-sm font-medium text-gray-600 mb-2">Best Estimated Target Weight</h5>
-                      <div className="text-lg font-bold text-green-600">
+                      <div className="text-md font-bold text-green-600">
                         {formatWeight(calculations?.goalRecommendations.bestTargetWeight || 0, userData.unitSystem)}
                       </div>
                       <p className="text-xs text-gray-500 mt-1">Optimal target to aim for</p>
                     </div>
                     <div className="bg-white rounded-lg p-3 border border-gray-200">
                       <h5 className="text-sm font-medium text-gray-600 mb-2">Your Ideal Waist Size</h5>
-                      <div className="text-lg font-bold text-blue-600">
+                      <div className="text-md font-bold text-blue-600">
                         {formatLength(calculations?.goalRecommendations.idealWaistSize || 0, userData.unitSystem)}
                       </div>
                       <p className="text-xs text-gray-500 mt-1">Target waist circumference</p>
@@ -1404,23 +1404,23 @@ export default function GoalPage() {
                   />
                 </div>
 
-                                                   <button
-                    onClick={async () => {
-                      if (!emailAddress.trim()) {
-                        return; // Don't proceed if email is empty
-                      }
-                      
-                      setIsEmailSending(true);
-                      setEmailSent(false);
-                      
-                      try {
-                        // Send email using the API
-                        const response = await fetch('/api/send-email', {
-                          method: 'POST',
-                          headers: {
-                            'Content-Type': 'application/json',
-                          },
-                                                  body: JSON.stringify({
+                <button
+                  onClick={async () => {
+                    if (!emailAddress.trim()) {
+                      return; // Don't proceed if email is empty
+                    }
+
+                    setIsEmailSending(true);
+                    setEmailSent(false);
+
+                    try {
+                      // Send email using the API
+                      const response = await fetch('/api/send-email', {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
                           email: emailAddress,
                           userData,
                           calculations,
@@ -1433,53 +1433,53 @@ export default function GoalPage() {
                           nutritionData, // Current profile data
                           savedProfiles // All saved profile data with exact UI values
                         }),
-                        });
-                        
-                        if (response.ok) {
-                          const result = await response.json();
-                          setEmailSent(true);
-                          setIsEmailSending(false);
-                          
-                          // Auto close after 3 seconds
-                          setTimeout(() => {
-                            setIsEmailDialogOpen(false);
-                            setEmailAddress('');
-                            setEmailSent(false);
-                          }, 3000);
-                        } else {
-                          const error = await response.json();
-                          console.error('Failed to send email:', error);
-                          setIsEmailSending(false);
-                          // Could add error state here if needed
-                        }
-                      } catch (error) {
-                        console.error('Error sending email:', error);
+                      });
+
+                      if (response.ok) {
+                        const result = await response.json();
+                        setEmailSent(true);
+                        setIsEmailSending(false);
+
+                        // Auto close after 3 seconds
+                        setTimeout(() => {
+                          setIsEmailDialogOpen(false);
+                          setEmailAddress('');
+                          setEmailSent(false);
+                        }, 3000);
+                      } else {
+                        const error = await response.json();
+                        console.error('Failed to send email:', error);
                         setIsEmailSending(false);
                         // Could add error state here if needed
                       }
-                    }}
-                    disabled={isEmailSending || emailSent || !emailAddress.trim()}
-                    className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center"
-                  >
-                    {isEmailSending ? (
-                      <>
-                        <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Sending...
-                      </>
-                    ) : emailSent ? (
-                      <>
-                        <svg className="mr-2 h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
-                        </svg>
-                        Email Sent Successfully!
-                      </>
-                    ) : (
-                      'Start the Free Master Class →'
-                    )}
-                  </button>
+                    } catch (error) {
+                      console.error('Error sending email:', error);
+                      setIsEmailSending(false);
+                      // Could add error state here if needed
+                    }
+                  }}
+                  disabled={isEmailSending || emailSent || !emailAddress.trim()}
+                  className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center"
+                >
+                  {isEmailSending ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Sending...
+                    </>
+                  ) : emailSent ? (
+                    <>
+                      <svg className="mr-2 h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                      </svg>
+                      Email Sent Successfully!
+                    </>
+                  ) : (
+                    'Start the Free Master Class →'
+                  )}
+                </button>
               </div>
             </div>
           </div>
