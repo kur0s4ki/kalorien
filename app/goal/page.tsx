@@ -67,6 +67,12 @@ export default function GoalPage() {
   // Local state for protein input (for display purposes)
   const [proteinInput, setProteinInput] = useState('');
   const [activelyEditingProtein, setActivelyEditingProtein] = useState(false);
+
+  // Local state for carbs input (grams per day)
+  const [carbsInput, setCarbsInput] = useState('150'); // Default 150g
+  const [carbsPerDay, setCarbsPerDay] = useState(150);
+  const [activelyEditingCarbs, setActivelyEditingCarbs] = useState(false);
+
   const isInitialized = useRef(false);
   const logCount = useRef(0);
 
@@ -86,6 +92,12 @@ export default function GoalPage() {
   const isProteinValid = (value: string) => {
     const numericValue = parseFloat(value);
     return !isNaN(numericValue) && numericValue >= 0.1 && numericValue <= 5.0;
+  };
+
+  // Helper function to validate carbs input
+  const isCarbsValid = (value: string) => {
+    const numericValue = parseFloat(value);
+    return !isNaN(numericValue) && numericValue >= 0 && numericValue <= 500;
   };
 
   // Helper function to get current weight in display units
@@ -149,6 +161,13 @@ export default function GoalPage() {
       setProteinInput(proteinPerKg.toString());
     }
   }, [proteinPerKg, activelyEditingProtein]);
+
+  // Sync carbs input with actual carbs value
+  useEffect(() => {
+    if (!activelyEditingCarbs) {
+      setCarbsInput(carbsPerDay.toString());
+    }
+  }, [carbsPerDay, activelyEditingCarbs]);
 
   // Calculate realistic target weight based on calorie deficit/surplus
   const calculateRealisticTargetWeight = (goal: string, currentWeightDisplay: number) => {
@@ -333,22 +352,6 @@ export default function GoalPage() {
 
   const calorieTarget = getCalorieTarget();
 
-  // Calculate goal-specific macro distribution
-  const getMacroDistribution = () => {
-    switch (selectedGoal) {
-      case 'lose-weight':
-        return { protein: 30, carbs: 40, fats: 30 }; // High protein for satiety
-      case 'gain-muscles':
-        return { protein: 25, carbs: 50, fats: 25 }; // High carbs for energy
-      case 'stay-fit':
-        return { protein: 20, carbs: 55, fats: 25 }; // Balanced distribution
-      default:
-        return { protein: 20, carbs: 55, fats: 25 };
-    }
-  };
-
-  const macroDistribution = getMacroDistribution();
-
   // Calculate actual protein intake based on goal and user preference
   const targetWeightForProtein = (isTargetWeightEnabled && selectedGoal !== 'stay-fit')
     ? getTargetWeightInKg()
@@ -356,46 +359,64 @@ export default function GoalPage() {
   // Use proteinPerKg setting (which is actually grams per pound in the UI)
   const goalProteinIntake = targetWeightForProtein * 2.20462 * proteinPerKg; // Convert kg to lbs, then multiply by g/lb setting
 
-  // Calculate protein percentage from actual protein needs
+  // NEW MACRO PRIORITY LOGIC: Protein → Carbs → Fats (auto-adjust)
+  // 1. Protein: calculated from g/lb of bodyweight
+  // 2. Carbs: user-set in grams per day
+  // 3. Fats: auto-calculated to fill remaining calories
+
+  // Calculate calories from protein and carbs
   const proteinCalories = goalProteinIntake * 4;
-  const calculatedProteinPercentage = (proteinCalories / calorieTarget) * 100;
+  const carbCalories = carbsPerDay * 4;
+  const proteinAndCarbCalories = proteinCalories + carbCalories;
 
-  // Ensure protein percentage is reasonable (10-40%)
-  const proteinPercentage = Math.min(40, Math.max(10, calculatedProteinPercentage));
+  // Calculate remaining calories for fat
+  const remainingCaloriesForFat = calorieTarget - proteinAndCarbCalories;
 
-  // Calculate remaining percentages proportionally
-  const remainingPercentage = 100 - proteinPercentage;
-  const baseFatPercentage = macroDistribution.fats;
-  const baseCarbPercentage = macroDistribution.carbs;
+  // Calculate fat grams (9 kcal per gram)
+  // Ensure minimum fat threshold of 20g for essential fatty acids and hormone production
+  const MINIMUM_FAT_GRAMS = 20;
+  let fatGrams = Math.max(MINIMUM_FAT_GRAMS, remainingCaloriesForFat / 9);
+  const fatCalories = fatGrams * 9;
 
-  // Scale non-protein macros proportionally to fit remaining percentage
-  const totalNonProtein = baseFatPercentage + baseCarbPercentage;
-  const fatPercentage = (baseFatPercentage / totalNonProtein) * remainingPercentage;
-  const carbPercentage = (baseCarbPercentage / totalNonProtein) * remainingPercentage;
+  // Check if protein + carbs exceed total calories (impossible combination)
+  const isMacroCombinationValid = proteinAndCarbCalories <= (calorieTarget - MINIMUM_FAT_GRAMS * 9);
+
+  // If invalid, we still show calculated values but will display a warning
+  // Recalculate actual totals based on constraints
+  const actualTotalCalories = proteinCalories + carbCalories + fatCalories;
+
+  // Calculate percentages based on actual calories
+  const proteinPercentage = (proteinCalories / calorieTarget) * 100;
+  const carbPercentage = (carbCalories / calorieTarget) * 100;
+  const fatPercentage = (fatCalories / calorieTarget) * 100;
 
   const nutritionData = {
     totalCalories: Math.round(calorieTarget),
     totalKJ: Math.round(calorieTarget * 4.184),
+    isMacroCombinationValid,
     macros: [
       {
         name: 'Proteins',
         amount: Math.round(goalProteinIntake),
         unit: 'g',
         percentage: Math.round(proteinPercentage),
+        calories: Math.round(proteinCalories),
         color: '#F44336'
       },
       {
         name: 'Carbohydrate',
-        amount: Math.round((calorieTarget * carbPercentage / 100) / 4),
+        amount: Math.round(carbsPerDay),
         unit: 'g',
         percentage: Math.round(carbPercentage),
+        calories: Math.round(carbCalories),
         color: '#0091EA'
       },
       {
         name: 'Fats',
-        amount: Math.round((calorieTarget * fatPercentage / 100) / 9),
+        amount: Math.round(fatGrams),
         unit: 'g',
         percentage: Math.round(fatPercentage),
+        calories: Math.round(fatCalories),
         color: '#FFC107'
       }
     ]
@@ -439,16 +460,16 @@ export default function GoalPage() {
     }
   }, [selectedGoal]);
 
-  // Save profile data when nutrition data changes (protein slider, target weight, etc.)
+  // Save profile data when nutrition data changes (protein slider, target weight, carbs, etc.)
   useEffect(() => {
     if (isInitialized.current) {
       const timer = setTimeout(() => {
         saveCurrentProfileData();
       }, 500); // Small delay to avoid too frequent saves
-      
+
       return () => clearTimeout(timer);
     }
-  }, [nutritionData.totalCalories, proteinPerKg, isTargetWeightEnabled, targetWeight]);
+  }, [nutritionData.totalCalories, proteinPerKg, isTargetWeightEnabled, targetWeight, carbsPerDay]);
 
 
 
@@ -528,56 +549,126 @@ export default function GoalPage() {
               {/* Conditional Content Based on Selected Goal */}
               {selectedGoal === 'stay-fit' && (
                 <>
-                  {/* Protein Intake for Maintain */}
-                  <div className="space-y-3">
-                    <div className="flex items-center space-x-3">
-                      <span className="text-sm font-medium text-gray-700">
-                        Protein Intake (g per lb body weight):
-                      </span>
-                      <Input
-                        type="number"
-                        value={proteinInput}
-                        onFocus={() => setActivelyEditingProtein(true)}
-                        onBlur={() => {
-                          setActivelyEditingProtein(false);
-                          // Only update if valid, otherwise keep input to show error
-                          if (isProteinValid(proteinInput)) {
-                            const value = parseFloat(proteinInput);
-                            setProteinPerKg(value);
-                          }
-                        }}
-                        onChange={(e) => {
-                          setProteinInput(e.target.value);
-                          const value = parseFloat(e.target.value);
-                          if (!isNaN(value) && value >= 0.1 && value <= 5.0) {
-                            setProteinPerKg(value);
-                          }
-                        }}
-                        className={`text-center w-20 h-8 font-bold ${!isProteinValid(proteinInput) && proteinInput !== '' ? 'border-red-500' : ''}`}
-                        style={{
-                          backgroundColor: !isProteinValid(proteinInput) && proteinInput !== '' ? 'rgba(239, 68, 68, 0.1)' : '#F5F5F5',
-                          border: `solid 1px ${!isProteinValid(proteinInput) && proteinInput !== '' ? '#EF4444' : '#CFCFCF'}`,
-                          borderRadius: '12px',
-                          fontSize: '14px'
-                        }}
-                        step="0.1"
-                        min="0.1"
-                        max="5.0"
-                        placeholder="1.0"
-                      />
+                  {/* Macro Inputs Section for Maintain */}
+                  <div className="space-y-4">
+                    {/* Protein Intake */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-700">
+                          Protein (g per lb body weight):
+                        </span>
+                        <Input
+                          type="number"
+                          value={proteinInput}
+                          onFocus={() => setActivelyEditingProtein(true)}
+                          onBlur={() => {
+                            setActivelyEditingProtein(false);
+                            if (isProteinValid(proteinInput)) {
+                              const value = parseFloat(proteinInput);
+                              setProteinPerKg(value);
+                            }
+                          }}
+                          onChange={(e) => {
+                            setProteinInput(e.target.value);
+                            const value = parseFloat(e.target.value);
+                            if (!isNaN(value) && value >= 0.1 && value <= 5.0) {
+                              setProteinPerKg(value);
+                            }
+                          }}
+                          className={`text-center w-20 h-8 font-bold ${!isProteinValid(proteinInput) && proteinInput !== '' ? 'border-red-500' : ''}`}
+                          style={{
+                            backgroundColor: !isProteinValid(proteinInput) && proteinInput !== '' ? 'rgba(239, 68, 68, 0.1)' : '#F5F5F5',
+                            border: `solid 1px ${!isProteinValid(proteinInput) && proteinInput !== '' ? '#EF4444' : '#CFCFCF'}`,
+                            borderRadius: '12px',
+                            fontSize: '14px'
+                          }}
+                          step="0.1"
+                          min="0.1"
+                          max="5.0"
+                          placeholder="1.0"
+                        />
+                      </div>
+                      {!isProteinValid(proteinInput) && proteinInput !== '' && (
+                        <div className="text-red-600 text-xs">
+                          Protein intake must be between 0.1 and 5.0 grams per pound
+                        </div>
+                      )}
+                      <p className="text-xs text-gray-500">
+                        Typical range: 0.8-1.2g per pound of body weight
+                      </p>
                     </div>
 
-                    {/* Error message for protein */}
-                    {!isProteinValid(proteinInput) && proteinInput !== '' && (
-                      <div className="text-red-600 text-xs mt-1">
-                        Protein intake must be between 0.1 and 5.0 grams per pound
+                    {/* Carbs Input */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-700">
+                          Carbs (grams per day):
+                        </span>
+                        <Input
+                          type="number"
+                          value={carbsInput}
+                          onFocus={() => setActivelyEditingCarbs(true)}
+                          onBlur={() => {
+                            setActivelyEditingCarbs(false);
+                            if (isCarbsValid(carbsInput)) {
+                              const value = parseFloat(carbsInput);
+                              setCarbsPerDay(value);
+                            }
+                          }}
+                          onChange={(e) => {
+                            setCarbsInput(e.target.value);
+                            const value = parseFloat(e.target.value);
+                            if (!isNaN(value) && value >= 0 && value <= 500) {
+                              setCarbsPerDay(value);
+                            }
+                          }}
+                          className={`text-center w-20 h-8 font-bold ${!isCarbsValid(carbsInput) && carbsInput !== '' ? 'border-red-500' : ''}`}
+                          style={{
+                            backgroundColor: !isCarbsValid(carbsInput) && carbsInput !== '' ? 'rgba(239, 68, 68, 0.1)' : '#F5F5F5',
+                            border: `solid 1px ${!isCarbsValid(carbsInput) && carbsInput !== '' ? '#EF4444' : '#CFCFCF'}`,
+                            borderRadius: '12px',
+                            fontSize: '14px'
+                          }}
+                          step="5"
+                          min="0"
+                          max="500"
+                          placeholder="150"
+                        />
                       </div>
-                    )}
+                      {!isCarbsValid(carbsInput) && carbsInput !== '' && (
+                        <div className="text-red-600 text-xs">
+                          Carbs must be between 0 and 500 grams per day
+                        </div>
+                      )}
+                      <p className="text-xs text-gray-500">
+                        Set to 0-50g for low-carb/keto, 100-200g for moderate, 200+ for high-carb
+                      </p>
+                    </div>
 
-                    <p className="text-xs text-gray-500">
-                      Adjust between 0.1-5.0g per pound (based on current weight)
-                    </p>
+                    {/* Fats - Auto-calculated */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-700">
+                          Fats (auto-calculated):
+                        </span>
+                        <div className="text-center w-20 h-8 font-bold flex items-center justify-center bg-gray-100 rounded-xl border border-gray-200">
+                          {nutritionData.macros[2].amount}g
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        Fats automatically adjust to meet your calorie target
+                      </p>
+                    </div>
                   </div>
+
+                  {/* Invalid Macro Combination Warning */}
+                  {!nutritionData.isMacroCombinationValid && (
+                    <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                      <p className="text-sm text-orange-700">
+                        ⚠️ Your protein and carb settings exceed your calorie target. Consider reducing carbs or protein to allow for adequate fat intake (minimum 20g for health).
+                      </p>
+                    </div>
+                  )}
 
                   {/* Maintenance Calories */}
                   <div className="space-y-4">
@@ -594,7 +685,7 @@ export default function GoalPage() {
                             fill="none"
                             stroke="#F44336"
                             strokeWidth="12"
-                            strokeDasharray={`${proteinPercentage * 2.51} 251`}
+                            strokeDasharray={`${Math.min(proteinPercentage, 100) * 2.51} 251`}
                             strokeDashoffset="0"
                             style={{ transition: 'stroke-dasharray 0.5s ease-in-out' }}
                           />
@@ -603,8 +694,8 @@ export default function GoalPage() {
                             fill="none"
                             stroke="#0091EA"
                             strokeWidth="12"
-                            strokeDasharray={`${carbPercentage * 2.51} 251`}
-                            strokeDashoffset={`-${proteinPercentage * 2.51}`}
+                            strokeDasharray={`${Math.min(carbPercentage, 100) * 2.51} 251`}
+                            strokeDashoffset={`-${Math.min(proteinPercentage, 100) * 2.51}`}
                             style={{ transition: 'stroke-dasharray 0.5s ease-in-out, stroke-dashoffset 0.5s ease-in-out' }}
                           />
                           <circle
@@ -612,11 +703,10 @@ export default function GoalPage() {
                             fill="none"
                             stroke="#FFC107"
                             strokeWidth="12"
-                            strokeDasharray={`${fatPercentage * 2.51} 251`}
-                            strokeDashoffset={`-${(proteinPercentage + carbPercentage) * 2.51}`}
+                            strokeDasharray={`${Math.min(fatPercentage, 100) * 2.51} 251`}
+                            strokeDashoffset={`-${Math.min(proteinPercentage + carbPercentage, 100) * 2.51}`}
                             style={{ transition: 'stroke-dasharray 0.5s ease-in-out, stroke-dashoffset 0.5s ease-in-out' }}
                           />
-
                         </svg>
                       </div>
                       <div>
@@ -625,7 +715,7 @@ export default function GoalPage() {
                         </div>
                       </div>
                     </div>
-                    {/* Nutrition Breakdown */}
+                    {/* Nutrition Breakdown with Calories */}
                     <div className="space-y-2">
                       {nutritionData.macros.map((macro, index) => (
                         <div key={index} className="flex items-center justify-between">
@@ -638,11 +728,14 @@ export default function GoalPage() {
                               {macro.name}
                             </span>
                           </div>
-                          <div className="flex items-center space-x-4">
-                            <span className="text-sm font-medium" style={{ color: macro.color }}>
+                          <div className="flex items-center space-x-3">
+                            <span className="text-sm font-medium w-16 text-right" style={{ color: macro.color }}>
                               {macro.amount} {macro.unit}
                             </span>
-                            <span className="text-sm font-medium w-8 text-right" style={{ color: macro.color }}>
+                            <span className="text-xs text-gray-500 w-16 text-right">
+                              {macro.calories} kcal
+                            </span>
+                            <span className="text-sm font-medium w-10 text-right" style={{ color: macro.color }}>
                               {macro.percentage}%
                             </span>
                           </div>
@@ -817,56 +910,126 @@ export default function GoalPage() {
                       </div>
                     )}
                   </div>
-                  {/* Protein Intake for Lose/Gain */}
-                  <div className="space-y-3">
-                    <div className="flex items-center space-x-3">
-                      <span className="text-sm font-medium text-gray-700">
-                        Protein Intake (g per lb body weight):
-                      </span>
-                      <Input
-                        type="number"
-                        value={proteinInput}
-                        onFocus={() => setActivelyEditingProtein(true)}
-                        onBlur={() => {
-                          setActivelyEditingProtein(false);
-                          // Only update if valid, otherwise keep input to show error
-                          if (isProteinValid(proteinInput)) {
-                            const value = parseFloat(proteinInput);
-                            setProteinPerKg(value);
-                          }
-                        }}
-                        onChange={(e) => {
-                          setProteinInput(e.target.value);
-                          const value = parseFloat(e.target.value);
-                          if (!isNaN(value) && value >= 0.1 && value <= 5.0) {
-                            setProteinPerKg(value);
-                          }
-                        }}
-                        className={`text-center w-20 h-8 font-bold ${!isProteinValid(proteinInput) && proteinInput !== '' ? 'border-red-500' : ''}`}
-                        style={{
-                          backgroundColor: !isProteinValid(proteinInput) && proteinInput !== '' ? 'rgba(239, 68, 68, 0.1)' : '#F5F5F5',
-                          border: `solid 1px ${!isProteinValid(proteinInput) && proteinInput !== '' ? '#EF4444' : '#CFCFCF'}`,
-                          borderRadius: '12px',
-                          fontSize: '14px'
-                        }}
-                        step="0.1"
-                        min="0.1"
-                        max="5.0"
-                        placeholder="1.0"
-                      />
+                  {/* Macro Inputs Section for Lose/Gain */}
+                  <div className="space-y-4">
+                    {/* Protein Intake */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-700">
+                          Protein (g per lb body weight):
+                        </span>
+                        <Input
+                          type="number"
+                          value={proteinInput}
+                          onFocus={() => setActivelyEditingProtein(true)}
+                          onBlur={() => {
+                            setActivelyEditingProtein(false);
+                            if (isProteinValid(proteinInput)) {
+                              const value = parseFloat(proteinInput);
+                              setProteinPerKg(value);
+                            }
+                          }}
+                          onChange={(e) => {
+                            setProteinInput(e.target.value);
+                            const value = parseFloat(e.target.value);
+                            if (!isNaN(value) && value >= 0.1 && value <= 5.0) {
+                              setProteinPerKg(value);
+                            }
+                          }}
+                          className={`text-center w-20 h-8 font-bold ${!isProteinValid(proteinInput) && proteinInput !== '' ? 'border-red-500' : ''}`}
+                          style={{
+                            backgroundColor: !isProteinValid(proteinInput) && proteinInput !== '' ? 'rgba(239, 68, 68, 0.1)' : '#F5F5F5',
+                            border: `solid 1px ${!isProteinValid(proteinInput) && proteinInput !== '' ? '#EF4444' : '#CFCFCF'}`,
+                            borderRadius: '12px',
+                            fontSize: '14px'
+                          }}
+                          step="0.1"
+                          min="0.1"
+                          max="5.0"
+                          placeholder="1.0"
+                        />
+                      </div>
+                      {!isProteinValid(proteinInput) && proteinInput !== '' && (
+                        <div className="text-red-600 text-xs">
+                          Protein intake must be between 0.1 and 5.0 grams per pound
+                        </div>
+                      )}
+                      <p className="text-xs text-gray-500">
+                        Typical range: 0.8-1.2g per pound of body weight
+                      </p>
                     </div>
 
-                    {/* Error message for protein */}
-                    {!isProteinValid(proteinInput) && proteinInput !== '' && (
-                      <div className="text-red-600 text-xs mt-1">
-                        Protein intake must be between 0.1 and 5.0 grams per pound
+                    {/* Carbs Input */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-700">
+                          Carbs (grams per day):
+                        </span>
+                        <Input
+                          type="number"
+                          value={carbsInput}
+                          onFocus={() => setActivelyEditingCarbs(true)}
+                          onBlur={() => {
+                            setActivelyEditingCarbs(false);
+                            if (isCarbsValid(carbsInput)) {
+                              const value = parseFloat(carbsInput);
+                              setCarbsPerDay(value);
+                            }
+                          }}
+                          onChange={(e) => {
+                            setCarbsInput(e.target.value);
+                            const value = parseFloat(e.target.value);
+                            if (!isNaN(value) && value >= 0 && value <= 500) {
+                              setCarbsPerDay(value);
+                            }
+                          }}
+                          className={`text-center w-20 h-8 font-bold ${!isCarbsValid(carbsInput) && carbsInput !== '' ? 'border-red-500' : ''}`}
+                          style={{
+                            backgroundColor: !isCarbsValid(carbsInput) && carbsInput !== '' ? 'rgba(239, 68, 68, 0.1)' : '#F5F5F5',
+                            border: `solid 1px ${!isCarbsValid(carbsInput) && carbsInput !== '' ? '#EF4444' : '#CFCFCF'}`,
+                            borderRadius: '12px',
+                            fontSize: '14px'
+                          }}
+                          step="5"
+                          min="0"
+                          max="500"
+                          placeholder="150"
+                        />
                       </div>
-                    )}
+                      {!isCarbsValid(carbsInput) && carbsInput !== '' && (
+                        <div className="text-red-600 text-xs">
+                          Carbs must be between 0 and 500 grams per day
+                        </div>
+                      )}
+                      <p className="text-xs text-gray-500">
+                        Set to 0-50g for low-carb/keto, 100-200g for moderate, 200+ for high-carb
+                      </p>
+                    </div>
 
-                    <p className="text-xs text-gray-500">
-                      Adjust between 0.1-5.0g per pound (0.8-1.2g typical range)
-                    </p>
+                    {/* Fats - Auto-calculated */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-700">
+                          Fats (auto-calculated):
+                        </span>
+                        <div className="text-center w-20 h-8 font-bold flex items-center justify-center bg-gray-100 rounded-xl border border-gray-200">
+                          {nutritionData.macros[2].amount}g
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        Fats automatically adjust to meet your calorie target
+                      </p>
+                    </div>
                   </div>
+
+                  {/* Invalid Macro Combination Warning */}
+                  {!nutritionData.isMacroCombinationValid && (
+                    <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                      <p className="text-sm text-orange-700">
+                        ⚠️ Your protein and carb settings exceed your calorie target. Consider reducing carbs or protein to allow for adequate fat intake (minimum 20g for health).
+                      </p>
+                    </div>
+                  )}
 
                   {/* Macro Breakdown for Lose/Gain */}
                   <div className="space-y-4">
@@ -880,7 +1043,7 @@ export default function GoalPage() {
                             fill="none"
                             stroke="#F44336"
                             strokeWidth="12"
-                            strokeDasharray={`${proteinPercentage * 2.51} 251`}
+                            strokeDasharray={`${Math.min(proteinPercentage, 100) * 2.51} 251`}
                             strokeDashoffset="0"
                             style={{ transition: 'stroke-dasharray 0.5s ease-in-out' }}
                           />
@@ -889,8 +1052,8 @@ export default function GoalPage() {
                             fill="none"
                             stroke="#0091EA"
                             strokeWidth="12"
-                            strokeDasharray={`${carbPercentage * 2.51} 251`}
-                            strokeDashoffset={`-${proteinPercentage * 2.51}`}
+                            strokeDasharray={`${Math.min(carbPercentage, 100) * 2.51} 251`}
+                            strokeDashoffset={`-${Math.min(proteinPercentage, 100) * 2.51}`}
                             style={{ transition: 'stroke-dasharray 0.5s ease-in-out, stroke-dashoffset 0.5s ease-in-out' }}
                           />
                           <circle
@@ -898,11 +1061,10 @@ export default function GoalPage() {
                             fill="none"
                             stroke="#FFC107"
                             strokeWidth="12"
-                            strokeDasharray={`${fatPercentage * 2.51} 251`}
-                            strokeDashoffset={`-${(proteinPercentage + carbPercentage) * 2.51}`}
+                            strokeDasharray={`${Math.min(fatPercentage, 100) * 2.51} 251`}
+                            strokeDashoffset={`-${Math.min(proteinPercentage + carbPercentage, 100) * 2.51}`}
                             style={{ transition: 'stroke-dasharray 0.5s ease-in-out, stroke-dashoffset 0.5s ease-in-out' }}
                           />
-
                         </svg>
                       </div>
                       <div>
@@ -911,7 +1073,7 @@ export default function GoalPage() {
                         </div>
                       </div>
                     </div>
-                    {/* Nutrition Breakdown */}
+                    {/* Nutrition Breakdown with Calories */}
                     <div className="space-y-2">
                       {nutritionData.macros.map((macro, index) => (
                         <div key={index} className="flex items-center justify-between">
@@ -924,11 +1086,14 @@ export default function GoalPage() {
                               {macro.name}
                             </span>
                           </div>
-                          <div className="flex items-center space-x-4">
-                            <span className="text-sm font-medium" style={{ color: macro.color }}>
+                          <div className="flex items-center space-x-3">
+                            <span className="text-sm font-medium w-16 text-right" style={{ color: macro.color }}>
                               {macro.amount} {macro.unit}
                             </span>
-                            <span className="text-sm font-medium w-8 text-right" style={{ color: macro.color }}>
+                            <span className="text-xs text-gray-500 w-16 text-right">
+                              {macro.calories} kcal
+                            </span>
+                            <span className="text-sm font-medium w-10 text-right" style={{ color: macro.color }}>
                               {macro.percentage}%
                             </span>
                           </div>

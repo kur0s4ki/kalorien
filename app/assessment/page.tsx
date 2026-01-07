@@ -6,14 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge';
 import { useCalculator } from '@/contexts/CalculatorContext';
 import { useConfig } from '@/contexts/ConfigContext';
-
-import { CircumferenceInput } from '@/components/ui/circumference-input';
 import { HeightInput } from '@/components/ui/height-input';
 
 const bodyTypes = [
@@ -28,7 +24,7 @@ const bodyTypes = [
 
 export default function HealthDataForm() {
     const router = useRouter();
-    const { userData, updateUserData, validationErrors, fieldErrors, isDataValid, calculations, forceCalculation, measurementsOptional, setMeasurementsOptional } = useCalculator();
+    const { userData, updateUserData, validationErrors, fieldErrors, isDataValid, calculations, forceCalculation } = useCalculator();
     const { config } = useConfig();
 
     // Helper function to get activity level display name
@@ -86,10 +82,6 @@ export default function HealthDataForm() {
     const [ageInput, setAgeInput] = useState('');
     const [heightInput, setHeightInput] = useState('');
     const [weightInput, setWeightInput] = useState('');
-    const [waistInput, setWaistInput] = useState('');
-    const [hipsInput, setHipsInput] = useState('');
-    const [neckInput, setNeckInput] = useState('');
-    const [shouldersInput, setShouldersInput] = useState('');
     const [bodyFatInput, setBodyFatInput] = useState('');
     const [selectedBodyType, setSelectedBodyType] = useState(() => {
         // Initialize based on current body fat or default to middle type
@@ -116,50 +108,6 @@ export default function HealthDataForm() {
                 setWeightInput(displayValue.toString());
             } else {
                 setWeightInput('');
-            }
-        }
-        if (!activelyEditing.waist) {
-            if (userData.measurements?.waist) {
-                // Convert from cm to display unit
-                const displayValue = userData.unitSystem === 'imperial'
-                    ? (userData.measurements.waist / 2.54).toFixed(1)
-                    : userData.measurements.waist.toString();
-                setWaistInput(displayValue);
-            } else {
-                setWaistInput('');
-            }
-        }
-        if (!activelyEditing.hips) {
-            if (userData.measurements?.hips) {
-                // Convert from cm to display unit
-                const displayValue = userData.unitSystem === 'imperial'
-                    ? (userData.measurements.hips / 2.54).toFixed(1)
-                    : userData.measurements.hips.toString();
-                setHipsInput(displayValue);
-            } else {
-                setHipsInput('');
-            }
-        }
-        if (!activelyEditing.neck) {
-            if (userData.measurements?.neck) {
-                // Convert from cm to display unit
-                const displayValue = userData.unitSystem === 'imperial'
-                    ? (userData.measurements.neck / 2.54).toFixed(1)
-                    : userData.measurements.neck.toString();
-                setNeckInput(displayValue);
-            } else {
-                setNeckInput('');
-            }
-        }
-        if (!activelyEditing.shoulders) {
-            if (userData.measurements?.shoulders) {
-                // Convert from cm to display unit
-                const displayValue = userData.unitSystem === 'imperial'
-                    ? (userData.measurements.shoulders / 2.54).toFixed(1)
-                    : userData.measurements.shoulders.toString();
-                setShouldersInput(displayValue);
-            } else {
-                setShouldersInput('');
             }
         }
         if (!activelyEditing.bodyFat) {
@@ -647,191 +595,6 @@ export default function HealthDataForm() {
                                     />
                                 ))}
                             </div>
-                        </div>
-
-                        {/* Measures Section */}
-                        <div className="space-y-4 pt-4 border-t">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center space-x-2">
-                                    <Label className="text-sm font-medium text-gray-700">Measures</Label>
-                                    <Badge variant="outline" className="text-xs">
-                                        Optional
-                                    </Badge>
-                                </div>
-                                <Switch
-                                    checked={measurementsOptional}
-                                    onCheckedChange={setMeasurementsOptional}
-                                    style={{
-                                        backgroundColor: measurementsOptional ? '#31860A' : '#D1D5DB'
-                                    }}
-                                />
-                            </div>
-
-                            {measurementsOptional && (
-                                <div className="space-y-4 pt-2">
-                                    <p className="text-sm text-gray-600">
-                                        Waist to hip ratio helps determine body type, fat distribution and potential risks.
-                                    </p>
-
-                                    <div className="grid grid-cols-2 gap-x-12 gap-y-4">
-                                        <div className="flex flex-col space-y-2">
-                                            <Label className="text-sm font-medium text-gray-700">
-                                                Neck circumference
-                                            </Label>
-                                            <CircumferenceInput
-                                                value={neckInput}
-                                                onChange={(value) => {
-                                                    setNeckInput(value);
-                                                    const numericValue = parseFloat(value);
-                                                    if (!isNaN(numericValue) && numericValue > 0) {
-                                                        // Convert to cm if imperial
-                                                        const valueInCm = userData.unitSystem === 'imperial'
-                                                            ? numericValue * 2.54
-                                                            : numericValue;
-                                                        updateUserData({
-                                                            measurements: {
-                                                                ...userData.measurements,
-                                                                neck: valueInCm
-                                                            }
-                                                        });
-                                                    }
-                                                }}
-                                                placeholder={userData.unitSystem === 'metric' ? '' : ''}
-                                                unitSystem={userData.unitSystem}
-                                                isValid={!fieldErrors.neck}
-                                                onFocus={() => setActivelyEditing(prev => ({ ...prev, neck: true }))}
-                                                onBlur={() => {
-                                                    setActivelyEditing(prev => ({ ...prev, neck: false }));
-                                                }}
-                                            />
-                                            {fieldErrors.neck && (
-                                                <p className="text-red-600 text-xs mt-1">
-                                                    {userData.unitSystem === 'metric'
-                                                        ? 'Must be between 20-60 cm'
-                                                        : 'Must be between 7.9-23.6 inches'}
-                                                </p>
-                                            )}
-                                        </div>
-
-                                        <div className="flex flex-col space-y-2">
-                                            <Label className="text-sm font-medium text-gray-700">
-                                                Waist circumference
-                                            </Label>
-                                            <CircumferenceInput
-                                                value={waistInput}
-                                                onChange={(value) => {
-                                                    setWaistInput(value);
-                                                    const numericValue = parseFloat(value);
-                                                    if (!isNaN(numericValue) && numericValue > 0) {
-                                                        // Convert to cm if imperial
-                                                        const valueInCm = userData.unitSystem === 'imperial'
-                                                            ? numericValue * 2.54
-                                                            : numericValue;
-                                                        updateUserData({
-                                                            measurements: {
-                                                                ...userData.measurements,
-                                                                waist: valueInCm
-                                                            }
-                                                        });
-                                                    }
-                                                }}
-                                                placeholder={userData.unitSystem === 'metric' ? '' : ''}
-                                                unitSystem={userData.unitSystem}
-                                                isValid={!fieldErrors.waist}
-                                                onFocus={() => setActivelyEditing(prev => ({ ...prev, waist: true }))}
-                                                onBlur={() => {
-                                                    setActivelyEditing(prev => ({ ...prev, waist: false }));
-                                                }}
-                                            />
-                                            {fieldErrors.waist && (
-                                                <p className="text-red-600 text-xs mt-1">
-                                                    {userData.unitSystem === 'metric'
-                                                        ? 'Must be between 30-200 cm'
-                                                        : 'Must be between 11.8-78.7 inches'}
-                                                </p>
-                                            )}
-                                        </div>
-
-                                        <div className="flex flex-col space-y-2">
-                                            <Label className="text-sm font-medium text-gray-700">
-                                                Hips circumference
-                                            </Label>
-                                            <CircumferenceInput
-                                                value={hipsInput}
-                                                onChange={(value) => {
-                                                    setHipsInput(value);
-                                                    const numericValue = parseFloat(value);
-                                                    if (!isNaN(numericValue) && numericValue > 0) {
-                                                        // Convert to cm if imperial
-                                                        const valueInCm = userData.unitSystem === 'imperial'
-                                                            ? numericValue * 2.54
-                                                            : numericValue;
-                                                        updateUserData({
-                                                            measurements: {
-                                                                ...userData.measurements,
-                                                                hips: valueInCm
-                                                            }
-                                                        });
-                                                    }
-                                                }}
-                                                placeholder={userData.unitSystem === 'metric' ? '' : ''}
-                                                unitSystem={userData.unitSystem}
-                                                isValid={!fieldErrors.hips}
-                                                onFocus={() => setActivelyEditing(prev => ({ ...prev, hips: true }))}
-                                                onBlur={() => {
-                                                    setActivelyEditing(prev => ({ ...prev, hips: false }));
-                                                }}
-                                            />
-                                            {fieldErrors.hips && (
-                                                <p className="text-red-600 text-xs mt-1">
-                                                    {userData.unitSystem === 'metric'
-                                                        ? 'Must be between 40-220 cm'
-                                                        : 'Must be between 15.7-86.6 inches'}
-                                                </p>
-                                            )}
-                                        </div>
-
-                                        <div className="flex flex-col space-y-2">
-                                            <Label className="text-sm font-medium text-gray-700">
-                                                Shoulder circumference
-                                            </Label>
-                                            <CircumferenceInput
-                                                value={shouldersInput}
-                                                onChange={(value) => {
-                                                    setShouldersInput(value);
-                                                    const numericValue = parseFloat(value);
-                                                    if (!isNaN(numericValue) && numericValue > 0) {
-                                                        // Convert to cm if imperial
-                                                        const valueInCm = userData.unitSystem === 'imperial'
-                                                            ? numericValue * 2.54
-                                                            : numericValue;
-                                                        updateUserData({
-                                                            measurements: {
-                                                                ...userData.measurements,
-                                                                shoulders: valueInCm
-                                                            }
-                                                        });
-                                                    }
-                                                }}
-                                                placeholder={userData.unitSystem === 'metric' ? '' : ''}
-                                                unitSystem={userData.unitSystem}
-                                                isValid={!fieldErrors.shoulders}
-                                                onFocus={() => setActivelyEditing(prev => ({ ...prev, shoulders: true }))}
-                                                onBlur={() => {
-                                                    setActivelyEditing(prev => ({ ...prev, shoulders: false }));
-                                                }}
-                                            />
-                                            {fieldErrors.shoulders && (
-                                                <p className="text-red-600 text-xs mt-1">
-                                                    {userData.unitSystem === 'metric'
-                                                        ? 'Must be between 30-300 cm'
-                                                        : 'Must be between 11.8-118.1 inches'}
-                                                </p>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
                         </div>
 
                         {/* Validation Errors */}
