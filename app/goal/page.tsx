@@ -174,42 +174,41 @@ export default function GoalPage() {
     if (!calculations) return currentWeightDisplay;
 
     if (goal === 'lose-weight') {
-      // Calculate expected weight loss based on calorie deficit
-      // slowLoss deficit is typically 400 calories/day
-      const deficit = calculations.calorieTargets.maintenance - calculations.calorieTargets.slowLoss;
-      // 1 pound of fat = ~3500 calories, assume 16-20 weeks for realistic timeline
-      const weeksForGoal = 18; // 4.5 months - realistic sustainable timeline
-      const expectedWeightLoss = (deficit * 7 * weeksForGoal) / 3500; // in pounds
+      // Use the ideal weight range as a guide for target weight
+      // The best target weight from calculations is the optimal goal
+      const bestTargetWeightKg = calculations?.goalRecommendations.bestTargetWeight || userData.weight;
 
-      // Convert to display units if needed
-      let weightLossInDisplayUnits = expectedWeightLoss;
-      if (userData.unitSystem === 'metric') {
-        weightLossInDisplayUnits = expectedWeightLoss / 2.20462; // Convert to kg
+      // Convert to display units
+      let targetWeightDisplay = bestTargetWeightKg;
+      if (userData.unitSystem === 'imperial') {
+        targetWeightDisplay = bestTargetWeightKg * 2.20462;
       }
 
-      const targetWeight = currentWeightDisplay - weightLossInDisplayUnits;
-      // Ensure target is within reasonable bounds
-      const minTarget = currentWeightDisplay * 0.8; // Don't go below 80% of current weight
-      return Math.max(Math.round(targetWeight * 2) / 2, minTarget); // Round to nearest 0.5
+      // Round to nearest 0.5
+      return Math.round(targetWeightDisplay * 2) / 2;
 
     } else if (goal === 'gain-muscles') {
-      // Calculate expected weight gain based on calorie surplus
-      // muscleGain surplus is typically 300 calories/day
-      const surplus = calculations.calorieTargets.muscleGain - calculations.calorieTargets.maintenance;
-      // Assume 16-20 weeks for realistic muscle gain timeline
-      const weeksForGoal = 18; // 4.5 months
-      const expectedWeightGain = (surplus * 7 * weeksForGoal) / 3500; // in pounds
+      // For muscle gain, aim for upper range of ideal weight if currently below it
+      const upperIdealWeightKg = calculations.idealWeightRange.upper;
 
-      // Convert to display units if needed
-      let weightGainInDisplayUnits = expectedWeightGain;
-      if (userData.unitSystem === 'metric') {
-        weightGainInDisplayUnits = expectedWeightGain / 2.20462; // Convert to kg
+      // If current weight is below upper ideal, aim for that
+      // Otherwise, aim for moderate gain (5-10% above current)
+      let targetWeightKg;
+      if (userData.weight < upperIdealWeightKg) {
+        targetWeightKg = upperIdealWeightKg;
+      } else {
+        // Aim for 5-8% gain for lean muscle development
+        targetWeightKg = userData.weight * 1.07;
       }
 
-      const targetWeight = currentWeightDisplay + weightGainInDisplayUnits;
-      // Ensure target is within reasonable bounds
-      const maxTarget = currentWeightDisplay * 1.2; // Don't go above 120% of current weight
-      return Math.min(Math.round(targetWeight * 2) / 2, maxTarget); // Round to nearest 0.5
+      // Convert to display units
+      let targetWeightDisplay = targetWeightKg;
+      if (userData.unitSystem === 'imperial') {
+        targetWeightDisplay = targetWeightKg * 2.20462;
+      }
+
+      // Round to nearest 0.5
+      return Math.round(targetWeightDisplay * 2) / 2;
     }
 
     return currentWeightDisplay; // Fallback
@@ -651,7 +650,7 @@ export default function GoalPage() {
                         <span className="text-sm font-medium text-gray-700">
                           Fats (auto-calculated):
                         </span>
-                        <div className="text-center w-20 h-8 font-bold flex items-center justify-center bg-gray-100 rounded-xl border border-gray-200">
+                        <div className="text-center w-20 h-8 flex items-center justify-center bg-gray-100 rounded-xl border border-gray-200" style={{ fontSize: '14px', fontWeight: 'bold' }}>
                           {nutritionData.macros[2].amount}g
                         </div>
                       </div>
@@ -1012,7 +1011,7 @@ export default function GoalPage() {
                         <span className="text-sm font-medium text-gray-700">
                           Fats (auto-calculated):
                         </span>
-                        <div className="text-center w-20 h-8 font-bold flex items-center justify-center bg-gray-100 rounded-xl border border-gray-200">
+                        <div className="text-center w-20 h-8 flex items-center justify-center bg-gray-100 rounded-xl border border-gray-200" style={{ fontSize: '14px', fontWeight: 'bold' }}>
                           {nutritionData.macros[2].amount}g
                         </div>
                       </div>
