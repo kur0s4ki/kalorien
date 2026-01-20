@@ -1321,16 +1321,16 @@ export default function GoalPage() {
 
 
             {/* Navigation Buttons - Always at bottom */}
-            <div className="pt-6 flex justify-between flex-shrink-0 md:border-t md:border-gray-200 md:mt-6 md:pt-4">
+            <div className="pt-6 flex flex-wrap-reverse justify-between gap-3 flex-shrink-0 md:border-t md:border-gray-200 md:mt-6 md:pt-4">
               <Button
                 variant="outline"
-                className="px-8"
+                className="w-full md:w-auto px-8"
                 onClick={() => router.push('/results')}
               >
-                Back
+                Return to Previous Section
               </Button>
               <Button
-                className="px-8 text-white font-medium"
+                className="px-8 text-white font-medium flex-1 md:flex-none min-w-fit"
                 style={{ backgroundColor: '#31860A' }}
                 onClick={() => {
                   // Save goal data to context or localStorage

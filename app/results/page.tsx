@@ -12,7 +12,7 @@ export default function ResultsPage() {
   const router = useRouter();
   const { userData, calculations } = useCalculator();
   const { config } = useConfig();
-  const [activePopup, setActivePopup] = useState<'basal' | 'bmi' | 'whr' | 'print' | null>(null);
+  const [activePopup, setActivePopup] = useState<'basal' | 'bmi' | 'print' | null>(null);
 
   // Redirect to home if calculations are missing (direct navigation or refresh)
   useEffect(() => {
@@ -42,7 +42,7 @@ export default function ResultsPage() {
     { label: 'Obese III', color: '#DC143C' }
   ];
 
-  const openPopup = (type: 'basal' | 'bmi' | 'whr' | 'print') => {
+  const openPopup = (type: 'basal' | 'bmi' | 'print') => {
     setActivePopup(type);
   };
 
@@ -50,7 +50,7 @@ export default function ResultsPage() {
     setActivePopup(null);
   };
 
-  const getPopupContent = (type: 'basal' | 'bmi' | 'whr' | 'print') => {
+  const getPopupContent = (type: 'basal' | 'bmi' | 'print') => {
     switch (type) {
       case 'basal':
         return {
@@ -87,25 +87,6 @@ export default function ResultsPage() {
             </div>
           )
         };
-      case 'whr':
-        return {
-          title: 'WHR Index',
-          content: (
-            <div className="text-sm text-gray-600 space-y-3">
-              <p>
-                WHR (Waist-to-Hip Ratio) helps assess body fat distribution and health risks associated with abdominal obesity. A higher WHR indicates more fat stored around the waist, which is associated with increased risk of cardiovascular disease and diabetes.
-              </p>
-              <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
-                <p className="text-orange-800 font-medium text-xs">
-                  <strong>Health Note:</strong> Waist circumference and WHR are better predictors of health risks than BMI alone, especially for cardiovascular disease risk.
-                </p>
-              </div>
-              <p className="text-xs">
-                Target waist-to-hip ratios: Men &lt; 0.90, Women &lt; 0.85 for lower health risks.
-              </p>
-            </div>
-          )
-        };
       case 'print':
         return {
           title: 'Print Results',
@@ -121,18 +102,18 @@ export default function ResultsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center overflow-hidden md:min-h-screen md:bg-gray-50 md:flex-none md:items-start md:overflow-visible">
-      <div className="max-w-2xl mx-auto w-full h-full md:h-auto md:p-4">
-        <Card className="shadow-lg w-full h-full flex flex-col md:h-auto" style={{ backgroundColor: '#F5F5F5' }}>
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center overflow-hidden p-0 md:min-h-screen md:bg-gray-50 md:flex-none md:items-start md:overflow-visible md:p-4">
+      <div className="w-full h-full md:max-w-2xl md:mx-auto md:h-auto">
+        <Card className="shadow-none md:shadow-lg w-full h-full min-h-screen md:min-h-0 flex flex-col md:h-auto rounded-none md:rounded-lg" style={{ backgroundColor: '#F5F5F5' }}>
           <CardHeader className="text-center pb-6 flex-shrink-0">
             <CardTitle className="text-2xl font-bold text-gray-800">
               {config.results_title || 'Your Results'}
             </CardTitle>
           </CardHeader>
-          <CardContent className="flex-1 flex flex-col overflow-y-auto md:overflow-y-visible md:space-y-4">
-            <div className="space-y-6 flex-1 md:flex-none md:space-y-4">
+          <CardContent className="flex-1 flex flex-col overflow-y-auto md:overflow-y-visible">
+            <div className="space-y-8 flex-1 md:flex-none px-4">
               {/* Basal Metabolism */}
-              <div className="space-y-3 md:space-y-2">
+              <div className="space-y-2">
                 <div className="flex justify-between items-center">
                   <h3 className="text-lg font-semibold text-gray-800">Basal Metabolism</h3>
                   <button
@@ -143,19 +124,18 @@ export default function ResultsPage() {
                     Explanation
                   </button>
                 </div>
-                <div className="text-center">
+                <div className="text-center py-6">
                   <div className="text-4xl font-bold text-gray-800">
                     {Math.round(calculations.bmr)} Calories
                   </div>
                 </div>
-
               </div>
 
               {/* Separator */}
               <hr className="border-gray-300" />
 
               {/* BMI Index */}
-              <div className="space-y-3 md:space-y-2">
+              <div className="space-y-2">
                 <div className="flex justify-between items-center">
                   <h3 className="text-lg font-semibold text-gray-800">BMI Index</h3>
                   <button
@@ -166,18 +146,18 @@ export default function ResultsPage() {
                     Explanation
                   </button>
                 </div>
-                <div className="text-center">
+                <div className="text-center py-6">
                   <div className="text-4xl font-bold text-gray-800">
                     {calculations.bmi.value.toFixed(2)}
                   </div>
                 </div>
 
                 {/* BMI Categories */}
-                <div className="flex justify-center space-x-1 my-4">
+                <div className="flex justify-center space-x-2 my-4">
                   {bmiCategories.map((category, index) => (
                     <div
                       key={index}
-                      className={`h-6 rounded-full flex-1 max-w-12 transition-all duration-300 ${index === calculations.bmi.categoryIndex
+                      className={`h-6 w-10 rounded-full transition-all duration-300 ${index === calculations.bmi.categoryIndex
                         ? 'ring-4 ring-gray-600 ring-opacity-60 scale-110 shadow-lg'
                         : 'opacity-40'
                         }`}
@@ -189,102 +169,11 @@ export default function ResultsPage() {
                   ))}
                 </div>
 
-                <div className="text-center">
+                <div className="text-center py-2">
                   <div className="text-xl font-semibold text-gray-800">
                     {calculations.bmi.category}
                   </div>
                 </div>
-
-              </div>
-
-              {/* Separator */}
-              <hr className="border-gray-300" />
-
-              {/* WHR Index */}
-              <div className="space-y-3 md:space-y-2">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-semibold text-gray-800">WHR Index</h3>
-                  <button
-                    onClick={() => openPopup('whr')}
-                    className="text-sm font-medium"
-                    style={{ color: '#31860A' }}
-                  >
-                    Explanation
-                  </button>
-                </div>
-
-                {!calculations.whr ? (
-                  <div className="flex items-start space-x-6">
-                    <div className="flex-shrink-0 relative">
-                      {/* Main body silhouette */}
-                      <img
-                        src={`/images/${userData.gender === 'male' ? 'muz-gray-1' : 'zena-gray-0'}.svg`}
-                        alt="Body silhouette"
-                        className="w-24 h-48 object-contain"
-                        style={{
-                          transform: 'translateY(22px)', // Adjust this value to move image up/down
-                          transition: 'transform 0.2s ease'
-                        }}
-                      />
-                    </div>
-                    <div className="flex-1">
-                      <div className="text-left mb-4">
-                        <div className="text-4xl font-bold text-gray-800">?</div>
-                      </div>
-                      <div className="text-left mb-4">
-                        <div className="text-lg font-semibold text-gray-800">
-                          Missing Data
-                        </div>
-                      </div>
-                      <div className="text-left text-sm text-gray-600 leading-relaxed">
-                        First, fill in the circumferences of the neck, waist and hips.
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex items-start space-x-6">
-                    <div className="flex-shrink-0 relative">
-                      {/* Main body silhouette */}
-                      <img
-                        src={`/images/${userData.gender === 'male' ? 'muz-gray-1' : 'zena-gray-0'}.svg`}
-                        alt="Body silhouette"
-                        className="w-24 h-48 object-contain"
-                        style={{
-                          transform: 'translateY(22px)', // Adjust this value to move image up/down
-                          transition: 'transform 0.2s ease'
-                        }}
-                      />
-                      {/* Overlapping WHR indicator image */}
-                      <img
-                        src={`/images/whr-${calculations.whr?.imageIndex}.svg`}
-                        alt="WHR indicator"
-                        className="absolute w-16 h-16 object-contain"
-                        style={{
-                          top: '45%',
-                          left: '50%',
-                          transform: 'translate(-50%, -50%)',
-                          zIndex: 10
-                        }}
-                      />
-                    </div>
-                    <div className="flex-1">
-                      <div className="text-left mb-4">
-                        <div className="text-4xl font-bold text-gray-800">
-                          {calculations.whr?.value.toFixed(2)}
-                        </div>
-                      </div>
-                      <div className="text-left mb-4">
-                        <div className="text-lg font-semibold text-gray-800">
-                          {calculations.whr?.category}
-                        </div>
-                      </div>
-                      <div className="text-left text-sm text-gray-600 leading-relaxed">
-                        {calculations.whr?.description}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
               </div>
 
             </div>
